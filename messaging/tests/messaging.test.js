@@ -131,3 +131,29 @@ test("ambimail rejects non-gateway senders and non-mail events", async () => {
   await post(`${base}/webhooks/ambimail`, { type: "webhook.test", data: { test: true } });
   assert.equal(received.length, before);
 });
+
+test("redelivery of the same mail id is deduped, not fanned out again", async () => {
+  const event = {
+    type: "email.received",
+    data: { id: "mail-dup", from: { email: "5550100100@vtext.com" }, body_text: "hi" },
+  };
+  await post(`${base}/webhooks/ambimail`, event);
+  const before = received.length;
+  const res = await post(`${base}/webhooks/ambimail`, event);
+  assert.equal((await res.json()).accepted, false);
+  assert.equal(received.length, before);
+});
+
+test("healthz and /messages report live state", async () => {
+  const hz = await (await fetch(`${base}/healthz`)).json();
+  assert.equal(hz.ok, true);
+  assert.equal(hz.transport, "sim");
+  assert.ok(hz.subscribers >= 1);
+  const { messages } = await (await fetch(`${base}/messages`)).json();
+  assert.ok(messages.some((m) => m.externalId === "ambmail-mail-9"));
+});
+
+test("subscriptions rejects a non-http url", async () => {
+  const res = await post(`${base}/subscriptions`, { url: "ftp://x" });
+  assert.equal(res.status, 400);
+});
