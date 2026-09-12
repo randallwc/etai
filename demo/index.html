@@ -181,7 +181,6 @@
       .bubble { max-width: 86%; margin: 9px 0; padding: 10px 13px; border-radius: 17px; font-size: clamp(12px, 1.2vw, 17px); line-height: 1.32; }
       .bubble.in { background: #e7e8ed; border-bottom-left-radius: 5px; }
       .bubble.out { margin-left: auto; color: white; background: #2671ff; border-bottom-right-radius: 5px; }
-      .bubble.approval { color: #4d3313; background: #ffe5bd; border: 1px solid #efbd77; }
 
       .callout {
         padding: clamp(21px, 3vw, 42px);
@@ -340,7 +339,7 @@
               <div class="timeline-item"><span class="step">1</span><p>A homeowner texts to request an electrical quote.</p></div>
               <div class="timeline-item"><span class="step">2</span><p>ETAi qualifies the request and offers real open times.</p></div>
               <div class="timeline-item"><span class="step">3</span><p>The client confirms a slot. ETAi books it and texts both parties.</p></div>
-              <div class="timeline-item"><span class="step">4</span><p>The current job runs long. ETAi prepares a client update for the electrician to approve.</p></div>
+              <div class="timeline-item"><span class="step">4</span><p>The current job runs long. ETAi shifts the next appointment and notifies the client.</p></div>
             </div>
           </div>
           <div class="phone" aria-label="Example text conversation">
@@ -359,18 +358,16 @@
       <section class="slide" aria-label="Slide 4 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
-          <div class="phone" aria-label="Example electrician delay confirmation">
+          <div class="phone" aria-label="Example electrician delay update">
             <div class="phone-bar"><span>2:17</span><span>5G ▰▰▰</span></div>
             <div class="phone-name">ETAi Scheduling</div>
             <div class="bubble in">Running 45 minutes late.</div>
-            <div class="bubble approval">Draft for Jordan: “I am finishing the previous job and now expect to arrive around 2:15 PM. Sorry for the delay.”<br><br>Reply SEND to confirm.</div>
-            <div class="bubble in">SEND</div>
-            <div class="bubble out">Sent to Jordan. I updated the appointment window in your calendar.</div>
+            <div class="bubble out">I shifted Jordan's appointment to 2:15 PM and texted the new arrival time.</div>
           </div>
           <div>
-            <p class="eyebrow">Contractor control</p>
-            <h2>The agent handles coordination. The electrician approves the commitment.</h2>
-            <div class="callout"><p>A delay changes a customer’s day. ETAi drafts the update, waits for an explicit SMS approval, then sends it and updates the calendar.</p></div>
+            <p class="eyebrow">Delay update</p>
+            <h2>ETAi keeps the schedule and the affected client in sync.</h2>
+            <div class="callout"><p>When the electrician reports a delay, ETAi finds the next confirmed job, shifts its calendar window, and texts the client a new arrival time.</p></div>
           </div>
         </div>
       </section>
@@ -416,7 +413,7 @@
           <div class="criteria-item"><h3>Working workflow</h3><p>A text becomes a scheduled quote. Both client and contractor receive confirmation.</p></div>
           <div class="criteria-item"><h3>Environment fit</h3><p>Phone and SMS supply the live context. The workflow would lose its value in a separate dashboard.</p></div>
           <div class="criteria-item"><h3>Integration depth</h3><p>ETAi reads availability and creates or changes real events in Ambiguous.</p></div>
-          <div class="criteria-item"><h3>Useful agent experience</h3><p>The agent responds in the channels people use, while the electrician confirms customer-impacting changes.</p></div>
+          <div class="criteria-item"><h3>Useful agent experience</h3><p>The agent responds in the channels people use and keeps the client informed when the schedule changes.</p></div>
         </div>
       </section>
 
