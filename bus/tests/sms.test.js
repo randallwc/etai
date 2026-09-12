@@ -145,7 +145,7 @@ test("gateway mail in produces a reply back out to the gateway", async () => {
   assert.equal(res.status, 202);
   await waitFor(() => mailOut.length === 1);
   assert.deepEqual(mailOut[0].to, [CLIENT_GATEWAY]);
-  assert.equal(mailOut[0].body_markdown, "Nothing booked for you right now - want me to set something up?");
+  assert.equal(mailOut[0].body_markdown, "etAI update: Nothing booked for you right now - want me to set something up?");
 });
 
 test("a booking is proposed and confirmed entirely over sms", async () => {
@@ -175,7 +175,7 @@ test("mailpoller carries a gateway reply into the loop", async () => {
   });
   await mailPoller.pollOnce();
   await waitFor(() =>
-    mailOut.some((m) => m.to[0] === CLIENT_GATEWAY && /^Canceled/.test(m.body_markdown)),
+    mailOut.some((m) => m.to[0] === CLIENT_GATEWAY && /^etAI update: Canceled/.test(m.body_markdown)),
   );
   await waitFor(() =>
     mailOut.some((m) => m.to[0] === CONTRACTOR_GATEWAY && /Client canceled/.test(m.body_markdown)),

@@ -109,7 +109,7 @@ test("a text travels messaging -> bus -> assistant -> back out as a reply", asyn
   const send = phoneSends[0];
   assert.match(send.path, /^\/api\/v1\/message\/text\?password=pw$/);
   assert.equal(send.body.chatGuid, `any;-;${CONTRACTOR}`);
-  assert.equal(send.body.message, "Nothing on the calendar today.");
+  assert.equal(send.body.message, "etAI update: Nothing on the calendar today.");
 });
 
 test("keyword intents answer without an assistant call", async () => {

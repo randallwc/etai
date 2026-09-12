@@ -65,7 +65,7 @@ function ambimail(env) {
               signal: AbortSignal.timeout(timeout),
               body: JSON.stringify({
                 to: [`${digits}@${d}`],
-                subject: "ETAi",
+                subject: "etAI",
                 body_markdown: body,
                 body_text: body,
               }),

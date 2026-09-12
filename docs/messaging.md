@@ -17,7 +17,15 @@ Send a message -- POST {MESSAGING_URL}/send
     -> 200 { "externalId": "..." }
 
   `to` is E.164. 400 means the request is invalid; 5xx means the transport
-  failed and the caller may retry.
+  failed and the caller may retry. Every outbound body is branded
+  "etAI update: <body>" at this boundary, so all senders produce
+  uniformly signed texts; bodies already starting with the prefix pass
+  through untouched.
+
+  CARRIER_GATEWAY must match the recipient's carrier or the ambimail
+  email-to-SMS hop silently delivers nothing. The demo number
+  +14253625633 is Verizon, so the repo .env uses vtext.com; replies
+  arrive from vzwpix.com.
 
 Receive messages -- POST {MESSAGING_URL}/subscriptions
 

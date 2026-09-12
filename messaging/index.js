@@ -7,6 +7,7 @@ const SEEN_CAP = 5000;
 const RECENT_CAP = 200;
 const RETRY_CAP = 500;
 const MAX_BODY = 1 << 20;
+const PREFIX = "etAI update: ";
 
 function createMessagingServer(env = process.env) {
   const transport = createTransport(env);
@@ -162,7 +163,8 @@ function createMessagingServer(env = process.env) {
         return reply(res, 400, { error: { code: "invalid", message: "to must be E.164 and body non-empty" } });
       }
       try {
-        const result = await transport.send({ to, body: body.body });
+        const text = body.body.startsWith(PREFIX) ? body.body : `${PREFIX}${body.body}`;
+        const result = await transport.send({ to, body: text });
         return reply(res, 200, result);
       } catch (e) {
         return reply(res, e.status ?? 502, { error: { code: "upstream", message: e.message } });
