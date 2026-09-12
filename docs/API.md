@@ -36,7 +36,7 @@ call.
 DATA MODEL
 ----------
 
-Defined in models/ as the first code commit (per AGENT.md). Fields below are
+Defined in models/ as the first code commit (per AGENTS.md). Fields below are
 the contract.
 
 Contractor. id, name, trade, phone (E.164), ambiguousUserId, working hours,
