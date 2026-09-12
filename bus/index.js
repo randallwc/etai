@@ -21,11 +21,12 @@ function createBusServer(env = process.env) {
   async function reply(to, body, threadKey) {
     if (!messagingUrl) return console.log(`[bus] -> ${to}: ${body}`);
     try {
-      await fetch(`${messagingUrl}/send`, {
+      const res = await fetch(`${messagingUrl}/send`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ to, body, threadKey }),
       });
+      console.log(`[bus] sent to ${to} via messaging (${res.status})`);
     } catch (e) {
       console.error(`[bus] send to messaging failed: ${e.message}`);
     }
