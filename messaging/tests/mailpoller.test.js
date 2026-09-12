@@ -111,7 +111,9 @@ describe("poller integration", () => {
     });
     assert.ok(mailPoller);
     try {
-      await mailPoller.pollOnce();
+      for (let i = 0; i < 100 && recent.length === 0; i++) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
       await mailPoller.pollOnce();
     } finally {
       mailPoller.stop();
@@ -167,4 +169,34 @@ describe("poller integration", () => {
     await poller.pollOnce();
     assert.equal(emitted.length, 0);
   });
+});
+
+test("a poll already in flight short-circuits the next tick", async () => {
+  let release;
+  let inboxHits = 0;
+  const origFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes("/api/mail/inbox")) {
+      inboxHits += 1;
+      if (inboxHits === 1) await new Promise((r) => (release = r));
+      return { ok: true, status: 200, json: async () => ({ data: [] }) };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  try {
+    const poller = createMailPoller(
+      { AMBIG_API: "ak_test", MAIL_POLL_SECONDS: "3600" },
+      async () => null,
+    );
+    const first = poller.pollOnce();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(await poller.pollOnce(), 0);
+    assert.equal(inboxHits, 1);
+    release();
+    assert.equal(await first, 0);
+    await poller.pollOnce();
+    assert.equal(inboxHits, 2);
+  } finally {
+    global.fetch = origFetch;
+  }
 });
