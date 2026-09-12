@@ -5,8 +5,11 @@
   "type": "object",
   "required": ["intent"],
   "properties": {
-    "intent": { "type": "string", "enum": ["book", "day_summary", "running_late", "cancel", "reschedule", "other"] },
+    "intent": { "type": "string", "enum": ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "clarify", "other"] },
     "dayRef": { "type": ["string", "null"], "description": "today | tomorrow | weekday name | YYYY-MM-DD" },
+    "jobRef": { "type": ["string", "null"], "description": "which of the texter's active jobs they mean, resolved against the context block: a job id, a title fragment like 'sprinkler', or a time like '2pm'" },
+    "question": { "type": ["string", "null"], "description": "for clarify: the short question to text back" },
+    "say": { "type": ["string", "null"], "description": "model-drafted reply text for clarify/other; one or two SMS-length sentences, no promises of action" },
     "timePref": { "type": ["string", "null"], "description": "morning | afternoon | evening | HH:MM" },
     "durationMinutes": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
     "delayMinutes": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
