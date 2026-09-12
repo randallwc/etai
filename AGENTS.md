@@ -4,6 +4,15 @@ Guidance for AI coding agents (and humans) working in this repository.
 Read this file fully before making changes. When it conflicts with a
 guess, this file wins.
 
+## 0. Hackathon theme
+
+Agents are leaving the chatbox. Build an agent for a place people
+already work, talk, or live, then make it meaningfully more useful
+because of that context. Put it into the web, mobile, Slack, Teams,
+messaging, browsers, voice, wearables, robotics, or somewhere nobody
+expects to find one yet. What becomes possible when the agent shows up
+where the work is already happening?
+
 ---
 
 ## 1. Engineering rules
