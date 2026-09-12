@@ -8,7 +8,7 @@ const ROOT = join(__dirname, "..");
 require(join(ROOT, "shared", "env.js")).loadEnv();
 const { toE164 } = require(join(ROOT, "messaging", "normalize.js"));
 
-const STEP_TIMEOUT_MS = Number(process.env.DEMO_STEP_TIMEOUT_MS ?? 20000);
+const STEP_TIMEOUT_MS = Number(process.env.DEMO_STEP_TIMEOUT_MS ?? 45000);
 const STEP_PAUSE_MS = Number(process.env.DEMO_STEP_PAUSE_MS ?? 800);
 const CLIENT = toE164(process.env.CLIENT_PHONE ?? "15550100002");
 const CONTRACTOR = toE164(process.env.CONTRACT_PHONE ?? "15550100001");
