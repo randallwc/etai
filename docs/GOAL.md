@@ -34,6 +34,14 @@ server. The human-facing Ambiguous calendar UI doubles as our demo visual --
 the agent has no UI of its own, but judges can watch its tool calls land on a
 real calendar in real time.
 
+TENETS
+------
+
+  - no chat -- the product surface is the phone, not a window
+  - ai uses tools -- the agent acts through the Ambiguous API, it does
+    not just talk
+  - solves a problem non-technical people actually have
+
 USERS
 -----
 
