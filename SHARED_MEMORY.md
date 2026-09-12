@@ -112,13 +112,13 @@ CURRENT GAPS
   - Voice calls not wired; Vapi preferred (mid-call tool calls), see
     docs/PHONE.md.
 
-AGENT REFACTOR IN FLIGHT
-------------------------
-A rewrite of agent/ is in progress in the shared worktree (untracked:
-loop.js, ai.js, state.js, reminders.js; schemas committed at
-models/intent.schema.json + thread.schema.json). The new loop expects
-calendar.js to export resolveDayRef, partsInTz, and a calendar surface
-of listDay/proposeSlots/createEvent/updateEvent/cancelEvent -- the
-committed calendar.js does NOT have these yet (it has the older
-listEvents/availability surface used by the committed index.js).
-Whoever lands the refactor must update calendar.js + index.js together.
+AGENT ARCHITECTURE
+----------------
+agent/ is now: index.js (HTTP + wiring), loop.js (intent->tools->reply),
+ai.js (LLM classify via Ambiguous assistant/chat, schema
+models/intent.schema.json), state.js (createStore(file|null); null =
+memory-only for tests), calendar.js (adapter: listDay, proposeSlots,
+createEvent/updateEvent/cancelEvent + resolveDayRef/partsInTz helpers +
+in-memory stubCalendar when no key), reminders.js (pre-job heads-up
+texts). index.js createAgentServer(env, overrides) accepts injected
+ambi/calendar/ai/store/notify/loop for tests.
