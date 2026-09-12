@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CallTranscript",
+  "description": "Payload handed to Ambiguous when a call ends. Stored as a document titled 'Call transcript — <iso>' so any coworker in the workspace can read and validate it.",
+  "type": "object",
+  "required": ["agentId", "transcript", "endedAt"],
+  "properties": {
+    "agentId": { "type": "string" },
+    "transcript": { "type": "string", "description": "Lines of 'from: text'" },
+    "endedAt": { "type": "string", "format": "date-time" }
+  }
+}

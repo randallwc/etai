@@ -1,0 +1,316 @@
+:root {
+  --agent-color: #7c5cff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    sans-serif;
+  overflow: hidden;
+}
+
+.app {
+  height: 100vh;
+}
+
+
+
+.ft-call {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+
+.agent-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: radial-gradient(
+    circle at 50% 45%,
+    color-mix(in srgb, var(--agent-color) 35%, #111) 0%,
+    #050505 75%
+  );
+}
+
+.orb-core {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 3rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(
+    150deg,
+    var(--agent-color),
+    color-mix(in srgb, var(--agent-color) 45%, #000)
+  );
+  box-shadow: 0 0 80px color-mix(in srgb, var(--agent-color) 50%, transparent);
+}
+
+.agent-surface.speaking .orb-core {
+  animation: talk 0.6s ease-in-out infinite;
+}
+
+@keyframes talk {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.agent-surface-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.agent-surface-label strong {
+  font-size: 1.3rem;
+}
+
+.agent-surface-label span {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+
+
+.pip {
+  position: absolute;
+  right: 16px;
+  top: 72px;
+  width: 140px;
+  aspect-ratio: 3 / 4;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  cursor: grab;
+  touch-action: none;
+  z-index: 20;
+}
+
+.pip:active {
+  cursor: grabbing;
+}
+
+.pip video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.pip-off {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: #222;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+}
+
+
+
+.ft-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  z-index: 10;
+}
+
+.agent-switcher {
+  display: flex;
+  gap: 8px;
+}
+
+.switch-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.switch-dot.on {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.ft-status {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+
+
+.ft-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 28px;
+  z-index: 10;
+}
+
+.caption {
+  max-width: 560px;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  padding: 10px 18px;
+  border-radius: 14px;
+}
+
+.caption-name {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--agent-color);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+
+.choices {
+  display: flex;
+  gap: 10px;
+}
+
+.choices button {
+  padding: 9px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.choices button:hover {
+  border-color: #fff;
+}
+
+.composer {
+  width: min(460px, 90vw);
+}
+
+.composer input {
+  width: 100%;
+  padding: 11px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  text-align: center;
+}
+
+.composer input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.composer input:focus {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.ft-controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.ctrl-btn {
+  padding: 12px 30px;
+  border-radius: 999px;
+  border: none;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.ctrl-btn.end {
+  background: #e03a3a;
+}
+
+.ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ctrl-btn.mic.on {
+  background: var(--agent-color);
+}
+
+.call-summary {
+  width: min(460px, 90vw);
+  max-height: 38vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  padding: 14px 18px;
+  border-radius: 14px;
+}
+
+.call-summary-head {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--agent-color);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summary-line {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.summary-who {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
