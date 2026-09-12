@@ -67,6 +67,11 @@ where the work is already happening?
    requested. User insists on the full version: build it.
 1. Commits: one-line heading plus 2-3 sentences. Keep details in
    `./docs`.
+1. Outbound texts are copy, not UI. One or two short sentences, single
+   hyphens, no lists or numbering. Offer choices inline ("I have 9:00 AM,
+   11:00 AM, or 1:00 PM open Fri. Which works?"); replies still parse as
+   number, ordinal, or time. The persona name appears only in the
+   greeting - never brand a reply.
 1. Tests: up to 80% line and branch coverage per commit, enforced by a
    git hook that runs tests on commit creation. Do not over-test or
    split code just to hit the number; test shared things more.
