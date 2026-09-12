@@ -91,15 +91,20 @@ LANDMINES
   - coworkers dispatch needs coworker_service_id, only present on
     persona-backed coworkers created post-verification. Act AS the agent.
   - Ambiguous list endpoints paginate {data,total,has_more}.
-  - iMessage needs a Mac running BlueBubbles; the only other real outbound
-    path today is ambimail (Ambiguous mail.send -> number@vtext.com),
-    wired into messaging/ transports -- Verizon-only, outbound-only, and
-    the gateway dies ~March 2027. Live sends to 2066169257 and
-    4253625633 went out on 2026-09-12; confirmed in /api/mail/sent but
-    handset delivery unconfirmed (vtext gives no receipt). Replies would
-    land in the workspace mail inbox (/api/mail/inbox) -- unproven as an
-    inbound path, inbox was empty at test time. Sim transport remains
-    for offline work.
+  - iMessage needs a Mac running BlueBubbles; the working path today is
+    ambimail (Ambiguous mail.send -> number@vtext.com), now proven
+    TWO-WAY: a real reply from 4253625633 landed in /api/mail/inbox on
+    2026-09-12, and messaging/mailpoller.js polls it every 15s
+    (?unread=true, marks read after accept). Gotchas: mail.send IGNORES
+    body_text silently -- must send body_markdown or the phone gets an
+    empty "ETAi" subject-only text. Replies arrive from vzwpix.com (MMS)
+    with the text in a text_0.txt attachment and preview "(no content)"
+    -- the poller fetches the attachment in that case. Verizon-only,
+    no delivery receipts, gateway dies ~March 2027. Sim transport
+    remains for offline work.
+  - Phone normalization: toE164 adds +1 for 10-digit inputs -- sim and
+    mail inbound agree on +1XXXXXXXXXX threadKeys. A message normalized
+    without the 1 (+4253...) misses jobForPhone lookups silently.
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
   - Ambiguous events/bookings are member-centric: availability only exists
     for workspace members (the contractor), not external clients.
@@ -112,10 +117,11 @@ LANDMINES
 CURRENT GAPS
 ------------
 
-  - Real INBOUND transport is the gap: the agent core is built and
-    tested end to end against sim/stub, but no provider delivers
-    inbound texts yet (BlueBubbles needs a Mac; LoopMessage is
-    inbound-initiated; Twilio is the fallback).
+  - Real inbound is now live via mailpoller (ambimail replies ->
+    /api/mail/inbox). What is still missing: a real phone-number-bound
+    channel for non-Verizon clients (BlueBubbles needs a Mac;
+    LoopMessage is inbound-initiated; Twilio is the fallback) and any
+    delivery receipt -- vtext drops silently.
   - Voice calls: the seam is ready -- POST {agent}/voice/turn takes
     {from, body} and returns {reply} to speak; the caller is not
     texted, counterparties are. A Vapi tool-call or frontend JS maps
