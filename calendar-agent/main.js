@@ -1,10 +1,4 @@
-const { existsSync } = require("node:fs");
-const path = require("node:path");
-
-const envFile = path.join(__dirname, "..", ".env");
-if (existsSync(envFile)) {
-  process.loadEnvFile(envFile);
-}
+require("../shared/env.js").loadEnv();
 
 const apiKey = process.env.AMBIGUOUS_API_KEY;
 const baseUrl = (process.env.AMBIGUOUS_BASE_URL ?? "https://app.ambiguous.ai").replace(/\/$/, "");
