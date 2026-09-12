@@ -1,6 +1,12 @@
 #!/bin/sh
 cd "$(dirname "$0")/.."
 echo $$ > /tmp/etai-serve.pid
+exec 8>/tmp/etai-serve.lock
+flock -n 8 || exit 0
+pkill -f "node messaging/index.js" 2>/dev/null
+pkill -f "node bus/index.js" 2>/dev/null
+pkill -f "node calendar-agent/notify.js" 2>/dev/null
+sleep 1
 supervise() {
   name=$1
   shift
