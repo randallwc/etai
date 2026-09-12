@@ -15,6 +15,7 @@
     "delayMinutes": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
     "name": { "type": ["string", "null"], "description": "caller-supplied name, when offered" },
     "description": { "type": ["string", "null"], "description": "what the job is, e.g. sprinkler repair" },
-    "slotChoice": { "type": ["integer", "null"], "exclusiveMinimum": 0, "description": "1-based index into a pending proposal's options" }
+    "slotChoice": { "type": ["integer", "null"], "exclusiveMinimum": 0, "description": "1-based index into a pending proposal's options" },
+    "location": { "type": ["string", "null"], "description": "service address for a booking, e.g. 220 Main St" }
   }
 }
