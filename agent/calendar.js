@@ -46,8 +46,28 @@ function resolveDayRef(dayRef, tz, now) {
   return today;
 }
 
-function dayBounds(date) {
-  return [`${date}T00:00:00`, `${date}T23:59:59`];
+function wallUtc(tz, instant) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric", second: "numeric",
+  }).formatToParts(instant);
+  const get = (t) => +parts.find((p) => p.type === t).value;
+  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"));
+}
+
+function localToUtc(date, hhmmss, tz) {
+  const target = Date.parse(`${date}T${hhmmss}Z`);
+  let guess = target;
+  for (let i = 0; i < 2; i++) guess = target - (wallUtc(tz, new Date(guess)) - guess);
+  return new Date(guess);
+}
+
+function dayBounds(date, tz) {
+  return [
+    localToUtc(date, "00:00:00", tz).toISOString(),
+    localToUtc(addDays(date, 1), "00:00:00", tz).toISOString(),
+  ];
 }
 
 function normEvent(e) {
@@ -60,18 +80,18 @@ function normEvent(e) {
   };
 }
 
-function prefBounds(date, timePref) {
-  let start = `${date}T${String(WORK_START).padStart(2, "0")}:00:00`;
-  let end = `${date}T${WORK_END}:00:00`;
-  if (timePref === "morning") end = `${date}T12:00:00`;
-  if (timePref === "afternoon") start = `${date}T13:00:00`;
-  if (timePref === "evening") start = `${date}T15:00:00`;
-  else if (/^\d{1,2}:\d{2}$/.test(timePref ?? "")) start = `${date}T${timePref}:00`;
-  return [new Date(start), new Date(end)];
+function prefBounds(date, timePref, tz) {
+  let start = `${String(WORK_START).padStart(2, "0")}:00`;
+  let end = `${WORK_END}:00`;
+  if (timePref === "morning") end = "12:00";
+  else if (timePref === "afternoon") start = "13:00";
+  else if (timePref === "evening") start = "15:00";
+  else if (/^\d{1,2}:\d{2}$/.test(timePref ?? "")) start = timePref;
+  return [localToUtc(date, `${start}:00`, tz), localToUtc(date, `${end}:00`, tz)];
 }
 
-function findSlots(busy, date, durationMinutes, count, timePref) {
-  const [start, end] = prefBounds(date, timePref);
+function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC") {
+  const [start, end] = prefBounds(date, timePref, tz);
   const sorted = [...busy]
     .map((b) => ({ start: new Date(b.start ?? b.start_at), end: new Date(b.end ?? b.end_at) }))
     .sort((a, b) => a.start - b.start);
@@ -100,26 +120,34 @@ function findSlots(busy, date, durationMinutes, count, timePref) {
  */
 function createCalendar({ ambi, env = process.env } = {}) {
   const client = ambi;
-  if (!client?.enabled) return stubCalendar();
+  const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
+  if (!client?.enabled) return stubCalendar(tz);
 
   let userId, calendarId;
   async function ids() {
-    if (!userId) userId = (await client.users())[0]?.id;
-    if (!calendarId) calendarId = (await client.calendars())[0]?.id;
+    if (!userId) {
+      const users = await client.users();
+      userId = (users.find((u) => u.type === "human") ?? users[0])?.id;
+    }
+    if (!calendarId) {
+      const cals = await client.calendars();
+      calendarId = (cals.find((c) => c.is_default) ?? cals[0])?.id;
+    }
     return { userId, calendarId };
   }
 
   return {
     stub: false,
     async listDay({ date }) {
-      const [a, b] = dayBounds(date);
+      const [a, b] = dayBounds(date, tz);
       return (await client.events(encodeURIComponent(a), encodeURIComponent(b))).map(normEvent);
     },
     async proposeSlots({ date, durationMinutes = 60, count = 3, timePref = null }) {
       const { userId: uid } = await ids();
-      const [a, b] = dayBounds(date);
+      if (!uid) throw new Error("no Ambiguous user for availability");
+      const [a, b] = dayBounds(date, tz);
       const busy = await client.busySlots(uid, a, b);
-      return findSlots(busy, date, durationMinutes, count, timePref);
+      return findSlots(busy, date, durationMinutes, count, timePref, tz);
     },
     async createEvent({ title, start, end, description }) {
       const { calendarId: cid } = await ids();
@@ -143,7 +171,7 @@ function createCalendar({ ambi, env = process.env } = {}) {
   };
 }
 
-function stubCalendar() {
+function stubCalendar(tz = "UTC") {
   const events = [];
   return {
     stub: true,
@@ -154,7 +182,7 @@ function stubCalendar() {
     },
     async proposeSlots({ date, durationMinutes = 60, count = 3, timePref = null }) {
       const busy = events.filter((e) => String(e.start).startsWith(date));
-      return findSlots(busy, date, durationMinutes, count, timePref);
+      return findSlots(busy, date, durationMinutes, count, timePref, tz);
     },
     async createEvent({ title, start, end, description }) {
       const ev = {

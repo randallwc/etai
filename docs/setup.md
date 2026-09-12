@@ -51,7 +51,9 @@ Demo
               /simulate/inbound and prints the transcript. Exits
               non-zero if an expected reply never arrives. With the
               repo .env the agent uses the real Ambiguous calendar;
-              AGENT_STUB=1 forces the in-memory stub.
+              without a key it gets the in-memory stub but intent
+              classification still needs Ambiguous, so the flows only
+              pass with a working key.
 
 Tests and hooks
 ---------------

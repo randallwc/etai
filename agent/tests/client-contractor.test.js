@@ -74,7 +74,7 @@ test("client booking offers multiple slots and picking one books it, contractor 
     const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
     const events = await calendar.listDay({ date });
     assert.equal(events.length, 1);
-    assert.equal(events[0].start, new Date(`${date}T10:30:00`).toISOString());
+    assert.equal(events[0].start, new Date(`${date}T10:30:00Z`).toISOString());
   } finally {
     server.close();
   }

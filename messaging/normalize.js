@@ -3,7 +3,8 @@ const { randomUUID } = require("node:crypto");
 function toE164(address) {
   const a = String(address ?? "").trim();
   if (a.startsWith("+")) return a;
-  return `+${a.replace(/\D/g, "")}`;
+  const digits = a.replace(/\D/g, "");
+  return digits.length === 10 ? `+1${digits}` : `+${digits}`;
 }
 
 function fromBlueBubbles(event) {
