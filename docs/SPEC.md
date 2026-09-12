@@ -101,9 +101,9 @@ parallel). Two rules keep the calendar a single source of truth:
 On the outbound side the reverse holds: mailpoller fan-out, calendar
 push, and calendar pull are all Promise.all -- reads and notifications
 are parallel, writes to shared state are serialized or overlap-guarded.
-Messaging keeps an undelivered queue (FANOUT_RETRY_MS/MAX) so a
-temporarily-dead bus never loses a text; seen + inflight dedup covers
-both sequential and concurrent redelivery.
+Messaging keeps an undelivered queue (FANOUT_RETRY_MS/MAX, persisted to
+UNDELIVERED_FILE) so a temporarily-dead bus never loses a text; seen +
+inflight dedup covers both sequential and concurrent redelivery.
 
 MESSAGING DETAILS THAT BITE
 ---------------------------
@@ -150,7 +150,8 @@ ENV
 AMBIG_API / AMBIGUOUS_API_KEY, AMBIGUOUS_BASE_URL, CONTRACT_PHONE,
 CLIENT_PHONE, CONTRACTOR_TZ, MESSAGING_URL, PUBLIC_URL, UPSTREAM_URL,
 BUS_URL, CALENDAR=memory, STATE_FILE, MAIL_POLL_SECONDS,
-FANOUT_RETRY_MS/MAX, CALENDAR_SYNC_MS/DAYS, REMINDER_LEAD_MINUTES,
+FANOUT_RETRY_MS/MAX, UNDELIVERED_FILE, ALLOWED_FROM,
+CALENDAR_SYNC_MS/DAYS, REMINDER_LEAD_MINUTES,
 AI_CLASSIFY_TIMEOUT_MS, BLUEBUBBLES_URL/PASSWORD, CARRIER_GATEWAY,
 GATEWAY_MAP. .env is gitignored -- never commit it.
 

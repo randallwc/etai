@@ -61,8 +61,11 @@ signal that feeds provider retries and the undelivered queue. Revisit
 if subscriber count grows past a handful.
 
 Mark skipped non-gateway mail read so the inbox query stops returning
-it. Rejected: the documented behavior is that mail from humans stays
-unread so a person still sees it in the workspace inbox.
+it. Rejected at first so a human still saw it as unread in the workspace
+inbox, then implemented: an ignored non-gateway mail was refetched and
+re-logged on every poll forever, and the mail remains visible in the
+mailbox either way. The in-memory skipped set still guards the
+mark-read-failure case.
 
 A ring buffer for the recent-messages log. Rejected: shift() on a
 200-entry array is noise, not a bottleneck.
@@ -80,6 +83,8 @@ subscriber count grows, the upgrade path is: mark deduped, ack
 immediately, and let the undelivered queue own delivery confirmation.
 That trades a weaker provider-facing signal for ack latency.
 
-In-memory state (seen, undelivered, skipped, recent) dies on restart.
-That is deliberate for the demo; a durable store is the upgrade path if
-redelivery-after-crash ever matters.
+In-memory state (seen, skipped, recent) dies on restart -- deliberate
+for the demo. The undelivered queue is the exception: it persists to
+UNDELIVERED_FILE so a restart cannot drop buffered inbound. A durable
+store for the rest is the upgrade path if redelivery-after-crash ever
+matters.

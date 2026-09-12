@@ -56,7 +56,8 @@ CONVENTIONS
   - Never commit secrets. Keys live in repo-root .env (gitignored);
     services load it via shared/env.js loadEnv() in their entry point.
     Names in use: AMBIG_API, AMBIGUOUS_API_KEY, COPILOT_API,
-    CONTRACT_PHONE, CLIENT_PHONE, BUS_URL (see .env.example).
+    CONTRACT_PHONE, CLIENT_PHONE, BUS_URL, GATEWAY_MAP, ALLOWED_FROM,
+    UNDELIVERED_FILE (see .env.example).
 
 VERIFIED AMBIGUOUS API (live-tested 2026-09-12, workspace etai-workspace)
 -------------------------------------------------------------------------
@@ -114,7 +115,11 @@ LANDMINES
     undelivered messages and re-fans them every FANOUT_RETRY_MS (5s)
     up to FANOUT_RETRY_MAX (24) times. accepted:false means "queued,
     not delivered yet" -- a redelivery of a queued message retries
-    immediately. /healthz shows queued count.
+    immediately. The queue is written to UNDELIVERED_FILE (default
+    /tmp/etai-undelivered.json) on every change and reloaded at boot,
+    so a messaging restart no longer drops queued inbound. /healthz
+    shows queued count and, when ALLOWED_FROM is set, its size as
+    "allowed" plus a warn when CONTRACT_PHONE is not on the list.
   - bus/calendar.js is a memory mirror, not a live passthrough: every
     listDay/proposeSlots/create/update/cancel is local-only. Writes
     reach Ambiguous on sync() -- at boot, every CALENDAR_SYNC_MS (30s),
@@ -187,3 +192,22 @@ HANDOFFS
     Caveat: clientUpdate only texts jobs still status "confirmed" with
     a future window, so for event.deleted the job status must be
     reconciled first or no client text goes out.
+
+  - .env.example (Agent D): now documents every env var the stack reads
+    (ALLOWED_FROM, FETCH_TIMEOUT_MS, UNDELIVERED_FILE, TTS_VOICE,
+    TURN_TIMEOUT_MS, WORKING_BEAT_MS, SEND_TIMEOUT_MS, SEND_RETRY_MS,
+    CONTRACTOR_PHONE alias, AMBIGUOUS_DAYS, PORT). If A/B/C add or
+    rename a var, flag it here rather than editing the file mid-flight.
+  - frontend/.env.local (Agent D): created with the real AMBIG key,
+    VITE_MESSAGING_URL=http://localhost:4020, VITE_BUS_URL=
+    http://localhost:4010, and VITE_DEMO_PHONE=+14253625633 so board
+    texts reroute to the demo phone. Verified end to end: POST /send
+    from the board payload shape returns an ambimail externalId and the
+    "etAI update: " prefix is applied server-side.
+
+  - docs/demo-day.md (Agent D owns it): still describes
+    CARRIER_GATEWAYS (env table ~line 40, silent-drop note ~line 153).
+    That mechanism is deleted -- GATEWAY_MAP won because one entry can
+    blast several domains. The same pins now read
+    GATEWAY_MAP=4253625633:vtext.com,8177136090:txt.att.net and
+    CARRIER_GATEWAY stays the fallback for unlisted numbers.

@@ -20,8 +20,11 @@ LISTENERS THAT MUST NEVER STOP
                         reaches zero live subscribers and re-fans it every
                         FANOUT_RETRY_MS (5s) up to FANOUT_RETRY_MAX (24).
                         Covers the resubscribe gap: a text arriving while
-                        the bus is down is delivered, not dropped.
-                        /healthz exposes the queue depth as "queued".
+                        the bus is down is delivered, not dropped. The
+                        queue persists to UNDELIVERED_FILE on every change
+                        and reloads at boot, so a messaging restart does
+                        not lose it either. /healthz exposes the queue
+                        depth as "queued".
 
   mail poller           messaging/mailpoller.js polls the Ambiguous inbox
                         every MAIL_POLL_SECONDS (15s default, 5s min) and
@@ -72,7 +75,8 @@ FAILURE MODES COVERED
 ---------------------
 
   messaging restart      subscribers wiped -> resubscribe loop heals;
-                         in-flight inbound buffered by the retry queue.
+                         in-flight inbound buffered by the retry queue,
+                         which itself survives the restart on disk.
   bus restart            messaging undelivered queue holds texts until
                          the bus returns; state reloads from STATE_FILE.
   Ambiguous slowness     all calls bounded; classify falls back to

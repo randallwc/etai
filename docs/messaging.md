@@ -37,9 +37,10 @@ Receive messages -- POST {MESSAGING_URL}/subscriptions
   threadKey. The webhook ack waits for fanout, bounded by FETCH_TIMEOUT_MS
   per subscriber -- a slow endpoint cannot stall the ack past the timeout
   and never blocks delivery to the healthy ones. If no subscriber accepts,
-  the message is queued in memory and retried every FANOUT_RETRY_MS up to
-  FANOUT_RETRY_MAX times; /simulate/inbound still reports 503 so a manual
-  caller knows it did not land yet.
+  the message is queued and retried every FANOUT_RETRY_MS up to
+  FANOUT_RETRY_MAX times; the queue persists to UNDELIVERED_FILE so a
+  restart cannot drop it, and /simulate/inbound still reports 503 so a
+  manual caller knows it did not land yet.
 
   Alternatively set UPSTREAM_URL on the service; it subscribes
   {UPSTREAM_URL}/webhooks/inbound automatically.
@@ -56,7 +57,9 @@ through the identical normalize -> dedup -> fanout path as a real iMessage,
 so the whole integration is exercisable without a Mac.
 
 GET /messages -- last 200 inbound messages, for demo debugging.
-GET /healthz -- { ok, transport, subscribers }.
+GET /healthz -- { ok, transport, subscribers, queued }, plus "allowed"
+(the allowlist size, not the numbers) when ALLOWED_FROM is set, and a
+"warn" field when CONTRACT_PHONE is missing from that allowlist.
 
 CONFIG
 ------
@@ -171,10 +174,11 @@ Phone derivation only accepts sender (or Reply-To) addresses on known
 carrier gateway domains -- vtext.com, vzwpix.com, vmobl.com, txt.att.net,
 messaging.sprintpcs.com, tmomail.net, and friends, plus whatever
 CARRIER_GATEWAY names. A ten-digit local part becomes +1<number>. Mail
-from ordinary addresses is logged once and skipped; it is left unread so
-a human still sees it. Skipped ids are remembered in memory (capped at
-5000, oldest evicted) so the same non-gateway mail is not re-normalized
-on every poll; a restart simply re-logs it once.
+from ordinary addresses is logged once, skipped, and marked read so the
+unread-only inbox query stops returning it (the human copy still exists
+in the mailbox, just not as an unread item). Skipped ids are also
+remembered in memory (capped at 5000, oldest evicted) so a failed
+mark-read does not re-log the same mail on every poll.
 
 The body is the first non-quoted block of body_text: lines starting with
 ">", an "On ... wrote:" header, separator runs, or "Sent from my ..."
