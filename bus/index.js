@@ -6,6 +6,7 @@ const { createCalendar } = require("./calendar.js");
 const { createAi } = require("./ai.js");
 const { createStore } = require("./state.js");
 const { createLoop } = require("./loop.js");
+const { createTts } = require("./tts.js");
 const { startReminders } = require("./reminders.js");
 
 const REQUIRED_INBOUND = ["channel", "from", "body", "externalId", "receivedAt", "threadKey"];
@@ -107,6 +108,13 @@ function createBusServer(env = process.env, overrides = {}) {
         stub: calendar.stub ?? false,
         ambiguous: ambi.enabled,
         messaging: Boolean(messagingUrl),
+      });
+    }
+    if (req.method === "GET" && path === "/state") {
+      return replyJson(res, 200, {
+        jobs: Object.values(store.data.jobs),
+        customers: Object.values(store.data.customers),
+        actions: store.data.actions,
       });
     }
     if (req.method !== "POST") {

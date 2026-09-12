@@ -22,10 +22,9 @@ Send a message -- POST {MESSAGING_URL}/send
   uniformly signed texts; bodies already starting with the prefix pass
   through untouched.
 
-  CARRIER_GATEWAY must match the recipient's carrier or the ambimail
-  email-to-SMS hop silently delivers nothing. The demo number
-  +14253625633 is Verizon, so the repo .env uses vtext.com; replies
-  arrive from vzwpix.com.
+  The carrier gateway must match the recipient's carrier or the ambimail
+  email-to-SMS hop silently delivers nothing. CARRIER_GATEWAYS routes
+  known numbers to their carrier's gateway; see CARRIER GATEWAYS below.
 
 Receive messages -- POST {MESSAGING_URL}/subscriptions
 
@@ -73,7 +72,9 @@ its entry point -- keep it out of library code so tests stay hermetic.
   BLUEBUBBLES_PASSWORD  its API password
   AMBIG_API             Ambiguous workspace key (or AMBIGUOUS_API_KEY)
   AMBIGUOUS_BASE_URL    defaults to https://app.ambiguous.ai
-  CARRIER_GATEWAY       defaults to vtext.com
+  CARRIER_GATEWAY       fallback gateway domain (default vtext.com)
+  CARRIER_GATEWAYS      optional JSON map of E.164 -> gateway domain,
+                        checked before CARRIER_GATEWAY per recipient
   MAIL_POLL_SECONDS     inbox poll interval (default 15; 0 disables)
   MAIL_POLL_LIMIT       inbox page size per poll (default 20)
   FETCH_TIMEOUT_MS      ceiling on every outbound fetch -- subscriber
@@ -92,6 +93,34 @@ Inbound replies DO come back, but through the mail inbox poller described
 below -- they are SMS replies landing as email, not iMessages. With
 neither configured the sim transport logs outbound texts to stdout and
 returns sim-* ids, which keeps every dependent agent fully testable.
+
+CARRIER GATEWAYS -- per-recipient ambimail routing
+-------------------------------------------------
+
+ambimail delivers by mailing <digits>@<gateway>. A carrier gateway only
+delivers to its own subscribers: send an AT&T number to vtext.com and
+Verizon accepts the mail, drops the SMS, and reports nothing -- the
+/send caller gets a 200 with a real externalId and no error exists on
+any side. The demo hit exactly this once (AT&T gateway, Verizon phone,
+silence). There is no delivery signal to key off; the only fix is
+routing each known number to the right domain.
+
+CARRIER_GATEWAYS is a JSON object of E.164 -> gateway domain, parsed
+once when the transport is built. A listed number uses its mapped
+domain; anything else falls back to CARRIER_GATEWAY (default
+vtext.com). Malformed JSON is ignored -- the whole map degrades to the
+fallback rather than crashing the service. Store it single-quoted in
+.env:
+
+    CARRIER_GATEWAYS='{"+14253625633":"vtext.com","+18177136090":"txt.att.net"}'
+
+shared/env.js strips the surrounding single quotes, leaving valid JSON;
+a shell sourcing the same file would eat unquoted inner double quotes
+and corrupt the map. The seeded entries are the two demo handsets:
++14253625633 is Verizon (vtext.com; replies arrive from vzwpix.com) and
++18177136090 is AT&T (txt.att.net). Add a line per known recipient; for
+unknown numbers pick the fallback to match the most likely carrier and
+accept the silent-drop risk.
 
 TESTING THE iMESSAGE PATH
 -------------------------
