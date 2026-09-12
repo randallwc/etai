@@ -178,6 +178,21 @@ test("send returns an externalId and rejects a bad phone", async () => {
   assert.equal(bad.status, 400);
 });
 
+test("outbound bodies are branded with the etAI update prefix", async () => {
+  const logs = [];
+  const orig = console.log;
+  console.log = (m) => logs.push(String(m));
+  try {
+    await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
+    await post(`${base}/send`, { to: "+15551234567", body: "etAI update: again" });
+  } finally {
+    console.log = orig;
+  }
+  assert.ok(logs.some((l) => l.includes("[sim] -> +15551234567: etAI update: ETA 10:20")));
+  assert.ok(logs.some((l) => l.includes("[sim] -> +15551234567: etAI update: again")));
+  assert.ok(!logs.some((l) => l.includes("etAI update: etAI update:")));
+});
+
 test("simulate inbound fans out a normalized message to subscribers", async () => {
   const res = await post(`${base}/simulate/inbound`, {
     from: "+15551234567",
