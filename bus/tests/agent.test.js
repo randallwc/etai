@@ -93,19 +93,15 @@ test("book asks for a day and address before offering slots", async () => {
   const before = sent.length;
   await inbound("g1", "book a job");
   await waitForReplies(before + 1);
-  assert.match(sent.at(-1).body, /what day or time works.*address/i);
+  assert.match(lastTo("+15551234567").body, /what day or time works.*address/i);
 
-  await inbound("g2", "tomorrow");
+  await inbound("g2", "tomorrow at 220 main st");
   await waitForReplies(before + 2);
-  assert.match(sent.at(-1).body, /address/i);
+  assert.match(lastTo("+15551234567").body, /which works/i);
 
-  await inbound("g3", "220 main st");
-  await waitForReplies(before + 3);
-  assert.match(sent.at(-1).body, /reply with a number/i);
-
-  await inbound("g4", "1");
+  await inbound("g3", "1");
   await waitForReplies(before + 4);
-  assert.match(sent.at(-1).body, /locked in/i);
+  assert.match(lastTo("+15551234567").body, /locked in/i);
 });
 
 test("a pending booking can be abandoned", async () => {

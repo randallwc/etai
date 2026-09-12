@@ -66,7 +66,7 @@ test("client booking offers multiple slots and picking one books it, contractor 
     await until(1);
     const offer = sent[0];
     assert.equal(offer.to, CLIENT);
-    assert.match(offer.body, /\d+:\d{2} [AP]M.*or \d+:\d{2} [AP]M/);
+    assert.match(offer.body, /\d+:\d{2} [AP]M.*or \d+\) \d+:\d{2} [AP]M/);
     assert.match(offer.body, /which works/i);
 
     await inbound("c2", "second");

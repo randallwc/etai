@@ -77,7 +77,7 @@ function askFor(b) {
 
 function optionsText(slots, dateLabel, description) {
   const what = description ? `${description} - ` : "";
-  return `${what}I have ${orList(slots.map((s) => s.label))} open ${dateLabel}. Which works?`;
+  return `${what}I have ${orList(slots.map((s, i) => `${i + 1}) ${s.label}`))} open ${dateLabel}. Which works?`;
 }
 
 /**
