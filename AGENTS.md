@@ -118,8 +118,8 @@ draggable picture-in-picture tile.
     ├── .env.local             VITE_AMBIGUOUS_API_KEY (gitignored)
     └── src/
         ├── main.jsx           entry point
-        ├── App.jsx            loads coworkers, holds selected agent
-        ├── agents.js          local fallback personas (offline mode)
+        ├── App.jsx            console shell: board, job detail, call overlay
+        ├── agents.js          the single etAI persona
         ├── styles.css         all styling, CSS custom properties
         ├── api/ambiguous.js   THE Ambiguous boundary — only file with fetch
         ├── lib/parseRequest.js request classification, done-detection,
@@ -127,7 +127,7 @@ draggable picture-in-picture tile.
         ├── lib/schedule.js    free/busy slot math, time formatting
         └── components/
             ├── CallScreen.jsx     call UI + conversation state machine
-            └── AgentSurface.jsx   full-screen agent visual (orb today)
+            └── AgentSurface.jsx   full-screen agent visual (Rive pin)
 ```
 
 ## 4. Commands
@@ -205,13 +205,14 @@ applies here too: one file fetches Ambiguous.
 
 ## 6. Architecture rules
 
-1. Small state, one owner. `App.jsx` loads the coworker list and holds
-   the selected agent. `CallScreen.jsx` owns the call phase machine:
+1. Small state, one owner. `App.jsx` owns the dispatch board and the
+   call overlay. `CallScreen.jsx` owns the call phase machine:
    connecting, live, sending, done — plus `awaitingTask` for the new-task
    branch.
-2. Personas are data, not code. With an API key they come from
-   `GET /api/users` (type agent). Without one they come from `agents.js`.
-   Never hardcode a persona inside a component.
+2. Personas are data, not code. The roster is a single etAI persona
+   from `agents.js`; `fetchCoworkers` stays in the api boundary if a
+   multi-agent roster ever returns. Never hardcode a persona inside a
+   component.
 3. The Ambiguous boundary is explicit: `src/api/ambiguous.js` is the only
    frontend file that calls fetch. The backend twin is
    `agent/ambiguous.js` once the agent core lands. Offline mode must
