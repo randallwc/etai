@@ -147,10 +147,6 @@ async function main() {
     CONTRACT_PHONE: CONTRACTOR,
     STATE_FILE: stateFile,
   };
-  if (process.env.AGENT_STUB) {
-    agentEnv.AMBIG_API = "";
-    agentEnv.AMBIGUOUS_API_KEY = "";
-  }
   const agent = spawn(process.execPath, [join(ROOT, "agent", "index.js")], { env: agentEnv });
   children.push(agent);
   watch(agent, "agent");
