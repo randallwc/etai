@@ -132,6 +132,23 @@ function eventOverlaps(event, request) {
   return start < new Date(request.end_at) && end > new Date(request.start_at);
 }
 
+function parseRescheduleText(text) {
+  if (typeof text !== "string") throw new Error("Reschedule text must be a string.");
+  const [id, startText, durationText] = text.split("|").map((part) => part.trim());
+  if (!id || !startText || !durationText || text.split("|").length !== 3) {
+    throw new Error("Use: event id | 2026-09-14T10:00:00-07:00 | 60m");
+  }
+  if (!/(Z|[+-]\d{2}:\d{2})$/i.test(startText)) {
+    throw new Error("Start time must include an ISO 8601 timezone offset.");
+  }
+  const start = new Date(startText);
+  const duration = Number(durationText.replace(/\s*(m|min|mins|minutes)$/i, ""));
+  if (Number.isNaN(start.getTime()) || !Number.isInteger(duration) || duration < 1 || duration > 1440) {
+    throw new Error("Use a valid ISO start time and a duration from 1 to 1440 minutes.");
+  }
+  return { id, start_at: start.toISOString(), end_at: new Date(start.getTime() + duration * 60000).toISOString() };
+}
+
 async function createEventFromText(text, { call = callTool } = {}) {
   let request;
   try {
@@ -165,6 +182,34 @@ async function createEventFromText(text, { call = callTool } = {}) {
   }
   const event = await call("create_event", { calendar_id: calendar.id, ...request });
   return { status: "created", request, event };
+}
+
+async function rescheduleEventFromText(text, { call = callTool } = {}) {
+  let request;
+  try {
+    request = parseRescheduleText(text);
+  } catch (error) {
+    return { status: "invalid", request: {}, message: error.message };
+  }
+  const start = new Date(request.start_at);
+  const end = new Date(request.end_at);
+  const events = await call("list_events", {
+    start: new Date(start.getTime() - 86400000).toISOString(),
+    end: new Date(end.getTime() + 86400000).toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime"
+  });
+  const conflicts = (events?.data ?? []).filter((event) => event.id !== request.id && eventOverlaps(event, request));
+  if (conflicts.length) {
+    return {
+      status: "conflict",
+      request,
+      conflicts,
+      message: "The requested time overlaps an existing calendar event."
+    };
+  }
+  const event = await call("update_event", request);
+  return { status: "updated", request, event };
 }
 
 async function main() {
@@ -201,4 +246,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, callTool, createEventFromText, eventOverlaps, formatSummary, parseEventText, readRpcMessage, rpc };
+module.exports = { main, callTool, createEventFromText, eventOverlaps, formatSummary, parseEventText, parseRescheduleText, readRpcMessage, rescheduleEventFromText, rpc };
