@@ -23,8 +23,8 @@ Send a message -- POST {MESSAGING_URL}/send
   through untouched.
 
   The carrier gateway must match the recipient's carrier or the ambimail
-  email-to-SMS hop silently delivers nothing. CARRIER_GATEWAYS routes
-  known numbers to their carrier's gateway; see CARRIER GATEWAYS below.
+  email-to-SMS hop silently delivers nothing. GATEWAY_MAP routes known
+  numbers to their carrier's gateway; see CARRIER GATEWAYS below.
 
 Receive messages -- POST {MESSAGING_URL}/subscriptions
 
@@ -73,12 +73,15 @@ its entry point -- keep it out of library code so tests stay hermetic.
   AMBIG_API             Ambiguous workspace key (or AMBIGUOUS_API_KEY)
   AMBIGUOUS_BASE_URL    defaults to https://app.ambiguous.ai
   CARRIER_GATEWAY       fallback gateway domain (default vtext.com)
-  CARRIER_GATEWAYS      optional JSON map of E.164 -> gateway domain,
-                        checked before CARRIER_GATEWAY per recipient
   GATEWAY_MAP           optional per-recipient override keyed on the
                         10-digit number: num:domain[+domain...] entries,
                         comma-separated; every listed domain is tried,
                         only the real carrier delivers
+  UNDELIVERED_FILE      on-disk spool for the undelivered retry queue
+                        (default /tmp/etai-undelivered.json)
+  ALLOWED_FROM          comma-separated E.164 senders to accept;
+                        empty accepts everyone; filtered senders get a
+                        202 and are never fanned out
   MAIL_POLL_SECONDS     inbox poll interval (default 15; 0 disables)
   MAIL_POLL_LIMIT       inbox page size per poll (default 20)
   FETCH_TIMEOUT_MS      ceiling on every outbound fetch -- subscriber
@@ -109,30 +112,19 @@ any side. The demo hit exactly this once (AT&T gateway, Verizon phone,
 silence). There is no delivery signal to key off; the only fix is
 routing each known number to the right domain.
 
-CARRIER_GATEWAYS is a JSON object of E.164 -> gateway domain, parsed
-once when the transport is built. A listed number uses its mapped
-domain; anything else falls back to CARRIER_GATEWAY (default
-vtext.com). Malformed JSON is ignored -- the whole map degrades to the
-fallback rather than crashing the service. Store it single-quoted in
-.env:
+GATEWAY_MAP is comma-separated num:domain[+domain...] entries keyed on
+the 10-digit number, and every listed domain is sent -- only the real
+carrier delivers, the rest are silent drops that cost nothing. Pin a
+known handset to one domain (4253625633:vtext.com for the Verizon demo
+phone, 8177136090:txt.att.net for the AT&T one); blast unknowns with a
+domain per likely carrier. Malformed entries (no colon, empty domain
+list) are ignored, never a crash. Numbers not in the map fall back to
+CARRIER_GATEWAY (default vtext.com).
 
-    CARRIER_GATEWAYS='{"+14253625633":"vtext.com","+18177136090":"txt.att.net"}'
-
-shared/env.js strips the surrounding single quotes, leaving valid JSON;
-a shell sourcing the same file would eat unquoted inner double quotes
-and corrupt the map. The seeded entries are the two demo handsets:
-+14253625633 is Verizon (vtext.com; replies arrive from vzwpix.com) and
-+18177136090 is AT&T (txt.att.net). Add a line per known recipient; for
-unknown numbers pick the fallback to match the most likely carrier and
-accept the silent-drop risk.
-
-GATEWAY_MAP is the coarser hammer for numbers whose carrier is unknown:
-comma-separated num:domain[+domain...] entries keyed on the 10-digit
-number, and every listed domain is sent -- only the real carrier
-delivers, the rest are silent drops that cost nothing. Malformed
-entries (no colon) are ignored, never a crash. CARRIER_GATEWAYS entries
-merge into the same lookup and win per number, so pin known handsets
-there and blast unknowns via GATEWAY_MAP.
+An earlier CARRIER_GATEWAYS JSON map was removed in favor of
+GATEWAY_MAP: the blast format already covers pinned routing by listing
+one domain, and keeping one mechanism means one doc, one parser, one
+lookup.
 
 TESTING THE iMESSAGE PATH
 -------------------------

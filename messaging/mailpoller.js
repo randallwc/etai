@@ -90,6 +90,7 @@ function createMailPoller(env, accept) {
               skipped.delete(skipped.values().next().value);
             }
             console.log(`mailpoller: skipping ${item.id}, no gateway phone`);
+            await markRead(item.id);
             return 0;
           }
           if (item.has_attachments && /^\(no content\)$/i.test(message.body)) {

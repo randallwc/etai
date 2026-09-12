@@ -172,3 +172,18 @@ notifications still go through notify() -> messaging /send.
 
 Make: every component has a Makefile (run/test); root Makefile
 delegates -- `make test` == `npm test`, `make run-bus` etc.
+
+HANDOFFS
+--------
+
+  - bus/index.js /webhooks/calendar (owner: whoever takes it; Agent B
+    cannot edit index.js): the handler texts only the contractor via
+    notifyContractor(). Route client-facing event types through
+    loop.clientUpdate(phone) instead: it already sends the "You have X
+    at Y, reply to move" text and logs client_update actions. To find
+    the phone, match the notification's event to a store job
+    (calendar.events carry remoteId; job.ambiguousEventId is the local
+    id, so match on remoteId for pushed events or id for pulled ones).
+    Caveat: clientUpdate only texts jobs still status "confirmed" with
+    a future window, so for event.deleted the job status must be
+    reconciled first or no client text goes out.

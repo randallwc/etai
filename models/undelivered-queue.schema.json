@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etai/models/undelivered-queue",
+  "title": "Undelivered Queue File",
+  "description": "On-disk shape of the messaging retry buffer written to UNDELIVERED_FILE (owner: messaging/index.js). Each entry pairs a normalized inboundMessage (see phone-contract.schema.json $defs.inboundMessage) with its retry count.",
+  "type": "array",
+  "$defs": {
+    "queueEntry": {
+      "type": "object",
+      "required": ["message", "attempts"],
+      "properties": {
+        "message": {
+          "type": "object",
+          "required": ["channel", "from", "body", "externalId", "receivedAt", "threadKey"],
+          "description": "normalized inboundMessage per phone-contract.schema.json"
+        },
+        "attempts": { "type": "integer", "exclusiveMinimum": -1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "items": { "$ref": "#/$defs/queueEntry" }
+}

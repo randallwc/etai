@@ -116,6 +116,27 @@ test("mirror reads memory, pushes writes in a batch, pulls remote changes", asyn
   assert.deepEqual(pushed.at(-1), { op: "delete", id: "remote-1" });
 });
 
+test("createEvent pushes to Ambiguous on its own; sync() is only the backstop", async () => {
+  const pushed = [];
+  const ambi = {
+    enabled: true,
+    users: async () => [{ id: "u1", type: "human" }],
+    calendars: async () => [{ id: "c1", is_default: true }],
+    createEvent: async (cid, body) => {
+      pushed.push({ cid, body });
+      return { id: "remote-1", ...body };
+    },
+  };
+  const cal = createCalendar({ ambi, env: {} });
+  await cal.createEvent({ title: "Sod install - Kim", start: "2026-09-16T16:00:00Z", end: "2026-09-16T17:00:00Z" });
+  assert.equal(pushed.length, 0);
+  for (let i = 0; i < 20 && !pushed.length; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(pushed.length, 1);
+  assert.equal(pushed[0].cid, "c1");
+  assert.equal(pushed[0].body.title, "Sod install - Kim");
+  assert.equal(cal.pendingOps(), 0);
+});
+
 test("overlapping creates conflict -- second writer loses", async () => {
   const cal = stubCalendar(TZ);
   const first = await cal.createEvent({ title: "a", start: "2026-09-14T16:00:00Z", end: "2026-09-14T17:00:00Z" });
