@@ -49,6 +49,23 @@ test("transport selection prefers bluebubbles, then ambimail, then sim", () => {
   assert.equal(createTransport({}).name, "sim");
 });
 
+test("ambimail sends the text as body_markdown so the body survives", async () => {
+  const { createTransport } = require("../transports.js");
+  let sent;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    sent = { url, body: JSON.parse(opts.body) };
+    return new Response(JSON.stringify({ id: "m1" }), { status: 200 });
+  };
+  try {
+    await createTransport({ AMBIG_API: "ak_x" }).send({ to: "+15551234567", body: "hi there" });
+  } finally {
+    globalThis.fetch = orig;
+  }
+  assert.equal(sent.body.to[0], "5551234567@vtext.com");
+  assert.equal(sent.body.body_markdown, "hi there");
+});
+
 test("send returns an externalId and rejects a bad phone", async () => {
   const ok = await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
   assert.equal(ok.status, 200);

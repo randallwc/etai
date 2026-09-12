@@ -12,6 +12,30 @@ function createMailPoller(env, accept) {
   const skipped = new Set();
   let timer = null;
 
+  async function attachmentBody(id) {
+    try {
+      const res = await fetch(`${base}/api/mail/${id}/attachments`, {
+        headers: { authorization: `Bearer ${key}` },
+      });
+      if (!res.ok) return null;
+      const list = (await res.json()).data ?? [];
+      const att =
+        list.find((a) => /^text\//.test(a.mimeType ?? "")) ?? list[0];
+      if (!att) return null;
+      const dl = await fetch(
+        `${base}/api/mail/${id}/attachments/${att.id}/download`,
+        { headers: { authorization: `Bearer ${key}` } },
+      );
+      if (!dl.ok) return null;
+      const { url } = await dl.json();
+      if (!url) return null;
+      const txt = await fetch(url);
+      return txt.ok ? (await txt.text()).trim() || null : null;
+    } catch {
+      return null;
+    }
+  }
+
   function markRead(id) {
     return fetch(`${base}/api/mail/${id}`, {
       method: "PATCH",
@@ -51,6 +75,11 @@ function createMailPoller(env, accept) {
           console.log(`mailpoller: skipping ${item.id}, no gateway phone`);
         }
         continue;
+      }
+      if (item.has_attachments && /^\(no content\)$/i.test(message.body)) {
+        const real = await attachmentBody(item.id);
+        if (!real) continue;
+        message.body = real;
       }
       if (await accept(message)) emitted += 1;
       await markRead(item.id);
