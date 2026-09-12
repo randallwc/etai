@@ -145,15 +145,15 @@ test("gateway mail in produces a reply back out to the gateway", async () => {
   assert.equal(res.status, 202);
   await waitFor(() => mailOut.length === 1);
   assert.deepEqual(mailOut[0].to, [CLIENT_GATEWAY]);
-  assert.equal(mailOut[0].body_markdown, "Nothing booked for you right now — want me to set something up?");
+  assert.equal(mailOut[0].body_markdown, "Nothing booked for you right now - want me to set something up?");
 });
 
 test("a booking is proposed and confirmed entirely over sms", async () => {
   await gatewayMail("sms-2", "can you come fix my sink");
-  await waitFor(() => mailOut.some((m) => /1\) 9:00 AM/.test(m.body_markdown)));
-  const offer = mailOut.find((m) => /1\) 9:00 AM/.test(m.body_markdown));
+  await waitFor(() => mailOut.some((m) => /9:00 AM/.test(m.body_markdown)));
+  const offer = mailOut.find((m) => /9:00 AM/.test(m.body_markdown));
   assert.deepEqual(offer.to, [CLIENT_GATEWAY]);
-  assert.match(offer.body_markdown, /Reply with a number/);
+  assert.match(offer.body_markdown, /which works/i);
 
   await gatewayMail("sms-3", "1");
   await waitFor(() => mailOut.some((m) => /Locked in/.test(m.body_markdown)));

@@ -50,10 +50,14 @@ function parseChoice(body, slots, tz) {
   return null;
 }
 
+function orList(items) {
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(", ")}${items.length > 2 ? "," : ""} or ${items.at(-1)}`;
+}
+
 function optionsText(slots, dateLabel, description) {
-  const list = slots.map((s, i) => `${i + 1}) ${s.label}`).join("  ");
-  const what = description ? `${description} — ` : "";
-  return `${what}I have these open ${dateLabel}: ${list}. Reply with a number.`;
+  const what = description ? `${description} - ` : "";
+  return `${what}I have ${orList(slots.map((s) => s.label))} open ${dateLabel}. Which works?`;
 }
 
 /**
@@ -159,7 +163,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     const p = thread.pendingProposal;
     if (/never ?mind|nvm|forget it|cancel/i.test(msg.body)) {
       store.setThread(msg.threadKey, { pendingProposal: null });
-      return say("No problem — nothing changed.");
+      return say("No problem, nothing changed.");
     }
     let n = parseChoice(msg.body, p.slots, tz);
     if (!n || n > p.slots.length) {
@@ -172,8 +176,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       ) {
         return propose(msg, retry, p.mode, p.jobId, say);
       } else {
-        const list = p.slots.map((s, i) => `${i + 1}) ${fmtTime(s.start, tz)}`).join("  ");
-        return say(`Sorry, which one — ${list}? Reply with a number.`);
+        const times = orList(p.slots.map((s) => fmtTime(s.start, tz)));
+        return say(`Sorry, which one - ${times}?`);
       }
     }
     const slot = p.slots[n - 1];
@@ -192,7 +196,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         calendar.proposeSlots({ date: slotDate, durationMinutes: durMin, count: 10 })
       )).some((s) => s.start.toISOString() === slot.start);
     if (!open) {
-      await say("That time was just taken —");
+      await say("That time was just taken.");
       return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description }, p.mode, p.jobId, say);
     }
     const customer = store.upsertCustomer(p.customerPhone, {});
@@ -205,9 +209,9 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       job.window = slot;
       store.save();
       store.setThread(msg.threadKey, { pendingProposal: null });
-      await say(`Done — moved to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`);
+      await say(`Done - moved to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`);
       if (!isContractor(msg.from)) {
-        await tellContractor(`${p.description} moved to ${fmtDay(slot.start, tz)} ${fmtTime(slot.start, tz)} by the client.`);
+        await tellContractor(`Client moved ${p.description} to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`);
       }
       return;
     }
@@ -216,12 +220,12 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     )).find((e) => e.status !== "canceled" && similarDesc(e.title, p.description));
     if (dupe) {
       store.setThread(msg.threadKey, { pendingProposal: null });
-      return say(`That's already on the calendar — ${dupe.title} ${fmtDay(dupe.start, tz)} at ${fmtTime(dupe.start, tz)}. Reply "move it" to change it.`);
+      return say(`Already on the calendar: ${dupe.title} ${fmtDay(dupe.start, tz)} at ${fmtTime(dupe.start, tz)}. Reply "move it" to change it.`);
     }
     const custName = store.data.customers[p.customerPhone]?.name;
     const ev = await record("book_job", { slot, description: p.description }, () =>
       calendar.createEvent({
-        title: `${p.description} — ${custName ?? p.customerPhone}`,
+        title: `${p.description} - ${custName ?? p.customerPhone}`,
         start: slot.start,
         end: slot.end,
         description: `${p.description}\nClient: ${custName ?? "unknown"} ${p.customerPhone}`,
@@ -237,9 +241,9 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       source: msg.channel === "voice" ? "call" : "message",
     });
     store.setThread(msg.threadKey, { pendingProposal: null });
-    await say(`Locked in — ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. We'll see you then.`);
+    await say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.`);
     if (!isContractor(msg.from)) {
-      await tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.`);
+      await tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.`);
     }
   }
 
@@ -247,7 +251,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     const mins = intent.delayMinutes ?? 15;
     const job = store.nextJob(now().getTime());
     if (!job?.ambiguousEventId) {
-      return say("I don't see an active job to shift — which visit is this about?");
+      return say("I don't see an active job. Which visit is this about?");
     }
     const start = new Date(new Date(job.window.start).getTime() + mins * 60000).toISOString();
     const end = new Date(new Date(job.window.end).getTime() + mins * 60000).toISOString();
@@ -261,11 +265,11 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     if (cust) {
       await notify({
         to: cust.phone,
-        body: `Running about ${mins} min late — new ETA ${fmtTime(start, tz)}. Sorry for the wait!`,
+        body: `Running about ${mins} min late - new ETA ${fmtTime(start, tz)}. Sorry for the wait.`,
         threadKey: cust.phone,
       });
     }
-    await say(`Updated — shifted ${job.description} by ${mins} min and let them know.`);
+    await say(`Updated - shifted ${job.description} by ${mins} min and let them know.`);
   }
 
   const DESC_STOP = new Set([
@@ -319,7 +323,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
   async function cancel(msg, intent, say) {
     const { job, ambiguous } = jobForIntent(msg, intent ?? {});
     if (ambiguous) {
-      return say("You have a few bookings — which one should I cancel?");
+      return say("You have a few bookings - which one should I cancel?");
     }
     if (!job?.ambiguousEventId) {
       return say("I don't see a booking to cancel.");
@@ -333,12 +337,12 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     if (isContractor(msg.from)) {
       const cust = Object.values(store.data.customers).find((c) => c.id === job.customerId);
       if (cust) {
-        await notify({ to: cust.phone, body: `Sorry — ${label} needs to be canceled. Reply here and I'll find you a new time.`, threadKey: cust.phone });
+        await notify({ to: cust.phone, body: `Sorry, ${label} needs to be canceled. Reply here and I'll find you a new time.`, threadKey: cust.phone });
       }
       return say(`Canceled ${label} and told them.`);
     }
     await say(`Canceled ${label}. If you want to rebook, just say so.`);
-    await tellContractor(`Client canceled ${label} — that slot is free.`);
+    await tellContractor(`Client canceled ${label} - that slot is free.`);
   }
 
   async function handle(msg) {
@@ -385,7 +389,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
                   pendingDedup: { jobId: existing.id, at: now().toISOString() },
                 });
                 store.logAction({ tool: "dedupe_warn", args: { jobId: existing.id, phone: msg.from } });
-                await say(`You already have ${existing.description} ${fmtDay(existing.window.start, tz)} at ${fmtTime(existing.window.start, tz)} — reply "move it" to reschedule, or ask again to book a second visit.`);
+                await say(`You already have ${existing.description} ${fmtDay(existing.window.start, tz)} at ${fmtTime(existing.window.start, tz)} - reply "move it" to reschedule, or ask again to book a second visit.`);
                 break;
               }
             }
@@ -395,8 +399,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           }
           case "reschedule": {
             const { job, ambiguous } = jobForIntent(msg, intent);
-            if (ambiguous) await say("Which visit should I move — reply with the job name or its day.");
-            else if (!job?.ambiguousEventId) await say("I don't see a booking to move — want me to set one up?");
+            if (ambiguous) await say("Which visit should I move? Reply with the name or day.");
+            else if (!job?.ambiguousEventId) await say("I don't see a booking to move - want me to set one up?");
             else await propose(msg, intent, "reschedule", job.id, say);
             break;
           }
@@ -406,12 +410,12 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
               const job = store.jobForPhone(msg.from);
               await say(job
                 ? `You have ${job.description} ${fmtDay(job.window.start, tz)} at ${fmtTime(job.window.start, tz)}.`
-                : "Nothing booked for you right now — want me to set something up?");
+                : "Nothing booked for you right now - want me to set something up?");
             }
             break;
           case "running_late":
             if (!isContractor(msg.from)) {
-              await say("No problem — I've let them know you're running behind.");
+              await say("No problem - I've let them know you're running behind.");
               await tellContractor(`Client ${msg.from} is running late.`);
               break;
             }
@@ -429,7 +433,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           }
           case "eta": {
             const job = store.jobForPhone(msg.from);
-            if (job?.eta) await say(`Latest ETA ${fmtTime(job.eta, tz)} — see you soon.`);
+            if (job?.eta) await say(`Latest ETA ${fmtTime(job.eta, tz)} - see you soon.`);
             else if (job) await say("The contractor will text you an ETA shortly.");
             else await say("I don't see an active job for you right now.");
             break;
@@ -441,13 +445,13 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
               const task = await record("create_task", { title: msg.body }, () => createTask(msg.body));
               await say(`Logged as a task: "${task?.title ?? msg.body}".`);
             } else {
-              await say(intent.say ?? "I can help you book, move, or cancel a visit — what do you need?");
+              await say(intent.say ?? "I can book, move, or cancel a visit - what do you need?");
             }
         }
       }
     } catch (e) {
       console.error(`agent loop failed for ${msg.externalId}: ${e.message}`);
-      await say("Sorry — I couldn't reach the calendar just now. Try again in a minute.");
+      await say("Sorry, I couldn't reach the calendar just now. Try again in a minute.");
     }
     return out.reply;
   }
