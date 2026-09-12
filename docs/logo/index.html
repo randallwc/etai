@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>etAI — logo options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #27272c;
+    --ink-dim: #5b6271;
+    --accent: #405ef2;
+    --line: #e5e7eb;
+    --dark: #17181d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 24px 96px;
+    background: #fff;
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 4px; }
+  .sub { color: var(--ink-dim); margin: 0 0 48px; font-size: 15px; }
+  .opt { margin-bottom: 64px; }
+  .opt h2 { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
+  .opt p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; margin: 0 0 20px; max-width: 560px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 180px;
+    padding: 32px;
+    background: #fff;
+  }
+  .card.dark { background: var(--dark); border-color: var(--dark); }
+  .card img { max-width: 100%; }
+  .sizes {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 36px;
+    padding: 20px 28px;
+    background: #fff;
+  }
+  .sizes span { font-size: 11px; color: var(--ink-dim); display: block; text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>etAI — logo options</h1>
+  <p class="sub">A dispatcher you text. Scheduling + arrival times for locksmiths, plumbers, electricians. Accent <code>#405ef2</code>, ink <code>#27272c</code>.</p>
+
+  <section class="opt">
+    <h2>A — two-tone wordmark</h2>
+    <p>Pure type, workman-simple: heavy Inter <b>et</b> in ink, <b>AI</b> in the Ambiguous brand gradient (blue → purple), with a short route line ending in a dot — the job is booked, the destination is set. Reads like a stencil on a truck door.</p>
+    <div class="cards">
+      <div class="card"><img src="etai-a-wordmark.svg" style="width:220px"></div>
+      <div class="card dark">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 88" style="width:220px">
+          <defs>
+            <linearGradient id="etai-grad-dark" x1="0" y1="0" x2="176" y2="88" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#1C6AFF"/>
+              <stop offset="0.4952" stop-color="#4F87ED"/>
+              <stop offset="1" stop-color="#8979CB"/>
+            </linearGradient>
+          </defs>
+          <text x="6" y="66" font-family="Inter, -apple-system, sans-serif" font-size="68" font-weight="800" letter-spacing="-3" fill="#ffffff">et<tspan fill="url(#etai-grad-dark)">AI</tspan></text>
+          <path d="M70 78 H132" stroke="url(#etai-grad-dark)" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="144" cy="78" r="5" fill="#8979CB"/>
+        </svg>
+      </div>
+    </div>
+    <div class="sizes">
+      <div><img src="etai-a-wordmark.svg" style="width:110px"><span>110</span></div>
+      <div><img src="etai-a-wordmark.svg" style="width:55px"><span>55</span></div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <h2>B — hex-nut badge</h2>
+    <p>The wordmark inside a bolt-head hexagon — the trades badge. Reads as a patch on a work shirt or a decal on a toolbox. Most "trustworthy contractor" of the three.</p>
+    <div class="cards">
+      <div class="card"><img src="etai-b-hex.svg" style="width:120px"></div>
+      <div class="card dark"><img src="etai-b-hex.svg" style="width:120px"></div>
+    </div>
+    <div class="sizes">
+      <div><img src="etai-b-hex.svg" style="width:48px"><span>48</span></div>
+      <div><img src="etai-b-hex.svg" style="width:32px"><span>32</span></div>
+      <div><img src="etai-b-hex.svg" style="width:16px"><span>16</span></div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <h2>C — job-site pin</h2>
+    <p><b>et</b> in ink, then a map pin carrying <b>AI</b> — the agent that shows up at the job site. Says both "arrival" and "AI" in one glance; doubles as the app icon.</p>
+    <div class="cards">
+      <div class="card"><img src="etai-c-pin.svg" style="width:220px"></div>
+      <div class="card dark">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 96" style="width:220px">
+          <text x="4" y="68" font-family="Inter, -apple-system, sans-serif" font-size="64" font-weight="800" letter-spacing="-2" fill="#ffffff">et</text>
+          <path d="M132 90 C120 72 103 62 103 40 A30 30 0 1 1 163 40 C163 62 146 72 132 90 Z" fill="#7a90ff"/>
+          <text x="133" y="52" text-anchor="middle" font-family="Inter, -apple-system, sans-serif" font-size="32" font-weight="800" letter-spacing="-1" fill="#17181d">AI</text>
+        </svg>
+      </div>
+    </div>
+    <div class="sizes">
+      <div><img src="etai-c-pin.svg" style="width:110px"><span>110</span></div>
+      <div><img src="etai-c-pin.svg" style="width:55px"><span>55</span></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

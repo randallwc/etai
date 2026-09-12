@@ -55,6 +55,7 @@ export default function Board({
 
   return (
     <aside className="side">
+      <img className="side-logo" src="/etai-wordmark.svg" alt="etAI" />
       <div className="side-label">Agents</div>
       {agents.map((a) => (
         <button key={a.id} className="agent-row" onClick={() => onCallAgent(a)}>
