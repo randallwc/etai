@@ -176,7 +176,7 @@ async function main() {
       label: "booking: client requests a visit",
       from: CLIENT,
       body: "need sprinklers fixed tomorrow",
-      expect: [{ to: CLIENT, re: /reply with a number/i, desc: "slot options to client" }],
+      expect: [{ to: CLIENT, re: /which works/i, desc: "slot options to client" }],
     },
     {
       label: "booking: client picks a slot",

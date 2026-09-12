@@ -77,7 +77,7 @@ test("book -> pick a slot -> locked in", async () => {
   const before = sent.length;
   await inbound("b1", "need sprinklers fixed Thursday");
   await waitForReplies(before + 1);
-  assert.match(lastTo("+15551234567").body, /reply with a number/i);
+  assert.match(lastTo("+15551234567").body, /which works/i);
   await inbound("b2", "1");
   await waitForReplies(before + 3);
   assert.match(lastTo("+15551234567").body, /locked in/i);

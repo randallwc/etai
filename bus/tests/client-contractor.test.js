@@ -61,8 +61,8 @@ test("client booking offers multiple slots and picking one books it, contractor 
     await until(1);
     const offer = sent[0];
     assert.equal(offer.to, CLIENT);
-    assert.match(offer.body, /1\).*2\)/);
-    assert.match(offer.body, /reply with a number/i);
+    assert.match(offer.body, /\d+:\d{2} [AP]M.*or \d+:\d{2} [AP]M/);
+    assert.match(offer.body, /which works/i);
 
     await inbound("c2", "second");
     await until(3);
@@ -122,7 +122,7 @@ test("reschedule proposes slots and moves the existing event", async () => {
     await until(3);
     await inbound("r3", "need to move it to friday");
     await until(4);
-    assert.match(sent[3].body, /reply with a number/i);
+    assert.match(sent[3].body, /which works/i);
     await inbound("r4", "1");
     await until(6);
     assert.match(sent[4].body, /moved/i);
@@ -208,7 +208,7 @@ test("a slot taken between offer and pick is refused and fresh options sent", as
     await inbound("t2", "1");
     await until(3);
     assert.match(sent[1].body, /just taken/i);
-    assert.match(sent[2].body, /reply with a number/i);
+    assert.match(sent[2].body, /which works/i);
     assert.equal(Object.keys(store.data.jobs).length, 0);
 
     await inbound("t3", "1");
@@ -288,7 +288,7 @@ test("a natural-language pivot inside a proposal starts a new proposal", async (
     await until(1);
     await inbound("p2", "actually can i move it to friday instead");
     await until(2);
-    assert.match(sent[1].body, /reply with a number/i);
+    assert.match(sent[1].body, /which works/i);
     const friday = resolveDayRef("friday", "UTC", new Date());
     const pending = store.thread(CLIENT).pendingProposal;
     assert.ok(pending.slots[0].start.startsWith(friday));

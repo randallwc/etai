@@ -103,7 +103,7 @@ test("clarify texts the question, stores pendingClarify, and the answer is re-cl
     assert.ok(store.thread(CLIENT).pendingClarify);
     await inbound("k2", "book a new one tomorrow");
     await until(2);
-    assert.match(sent[1].body, /open|Reply with a number/);
+    assert.match(sent[1].body, /which works/i);
     assert.equal(store.thread(CLIENT).pendingClarify ?? null, null);
     assert.ok(calls[1] !== undefined);
   } finally {
@@ -183,7 +183,7 @@ test("same-client duplicate booking warns, and a repeat asks proceeds", async ()
     assert.equal(Object.keys(store.data.jobs).length, 1);
     await inbound("d2", "book sprinklers again anyway");
     await until(2);
-    assert.match(sent[1].body, /open|Reply with a number/);
+    assert.match(sent[1].body, /which works/i);
     assert.ok(store.thread(CLIENT).pendingProposal);
   } finally {
     server.close();
@@ -204,10 +204,10 @@ test("an event already on the calendar refuses a duplicate create", async () => 
   try {
     await inbound("e1", "need sprinkler repair tomorrow");
     await until(1);
-    assert.match(sent[0].body, /Reply with a number/);
+    assert.match(sent[0].body, /which works/i);
     await inbound("e2", "1");
     await until(2);
-    assert.match(sent[1].body, /already on the calendar/);
+    assert.match(sent[1].body, /already on the calendar/i);
     assert.equal(store.thread(CLIENT).pendingProposal ?? null, null);
     assert.equal(Object.keys(store.data.jobs).length, 0);
   } finally {
