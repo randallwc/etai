@@ -23,7 +23,8 @@
     "description": { "type": "string", "minLength": 1 },
     "source": { "type": "string", "enum": ["message", "call"] },
     "eta": { "type": ["string", "null"], "format": "date-time", "description": "current ETA texted to the client, when set" },
-    "remindedAt": { "type": "string", "format": "date-time", "description": "when the contractor was reminded to head to this job; absence means not yet reminded" }
+    "remindedAt": { "type": "string", "format": "date-time", "description": "when the contractor was reminded to head to this job; absence means not yet reminded" },
+    "packet": { "type": "object", "description": "paperwork bundle created at booking time; shape is models/job-packet.schema.json" }
   },
   "additionalProperties": false
 }
