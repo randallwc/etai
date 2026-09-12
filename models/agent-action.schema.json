@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentAction",
+  "description": "Audit record for one tool call made by the agent loop. Makes the demo legible and lets a failed Ambiguous call be retried without re-prompting the user. Exactly one of result or error is set. Defined by the data model in docs/API.md.",
+  "type": "object",
+  "required": ["id", "tool", "args", "createdAt"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "tool": { "type": "string", "minLength": 1, "description": "tool name from docs/API.md, e.g. book_job" },
+    "args": { "type": "object" },
+    "result": { "description": "tool return value; absent when the call failed" },
+    "error": { "type": "string", "description": "failure message; absent on success" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

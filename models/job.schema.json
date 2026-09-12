@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Job",
+  "description": "One booked or requested piece of work. ambiguousEventId links it to the contractor's Ambiguous calendar event. Status transitions are validated by the agent loop (a canceled job cannot go en_route). Defined by the data model in docs/API.md.",
+  "type": "object",
+  "required": ["id", "customerId", "contractorId", "status", "window", "description", "source"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "customerId": { "type": "string", "minLength": 1 },
+    "contractorId": { "type": "string", "minLength": 1 },
+    "ambiguousEventId": { "type": ["string", "null"], "description": "null until book_job lands the event" },
+    "status": { "type": "string", "enum": ["requested", "confirmed", "en_route", "done", "canceled"] },
+    "window": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "address": { "type": "string" },
+    "description": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "enum": ["message", "call"] },
+    "eta": { "type": ["string", "null"], "format": "date-time", "description": "current ETA texted to the client, when set" }
+  },
+  "additionalProperties": false
+}
