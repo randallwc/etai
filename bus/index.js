@@ -31,6 +31,7 @@ function createBusServer(env = process.env, overrides = {}) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ to, body, threadKey: to }),
+        signal: AbortSignal.timeout(Number(env.SEND_TIMEOUT_MS ?? 10_000)),
       });
       if (!res.ok) throw new Error(`messaging /send -> ${res.status}`);
       console.log(`[bus] sent to ${to} via messaging (${res.status})`);
@@ -82,8 +83,12 @@ function createBusServer(env = process.env, overrides = {}) {
   let turn = Promise.resolve();
   function enqueue(fn) {
     const p = turn.then(fn);
-    turn = p.catch(() => {});
-    return p;
+    const timed = Promise.race([
+      p,
+      new Promise((_, rej) => setTimeout(() => rej(new Error("turn timeout")), 30_000)),
+    ]);
+    turn = timed.catch(() => {});
+    return timed;
   }
 
   function validInbound(body) {

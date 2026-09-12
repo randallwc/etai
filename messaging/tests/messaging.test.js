@@ -345,6 +345,47 @@ test("simulate inbound reports 503 when no subscriber accepts", async () => {
   }
 });
 
+test("queued inbound reaches a late subscriber exactly once via retryUndelivered", async () => {
+  const app = createMessagingServer({ FANOUT_RETRY_MS: 60000, FANOUT_RETRY_MAX: 5 });
+  const lone = app.server;
+  await new Promise((r) => lone.listen(0, r));
+  const loneBase = `http://127.0.0.1:${lone.address().port}`;
+  const sinkReceived = [];
+  const sink = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      sinkReceived.push(JSON.parse(Buffer.concat(chunks)));
+      res.writeHead(202, { "content-type": "application/json" });
+      res.end("{}");
+    });
+  });
+  await new Promise((r) => sink.listen(0, r));
+  const sinkBase = `http://127.0.0.1:${sink.address().port}`;
+  try {
+    await post(`${loneBase}/subscriptions`, { url: "http://127.0.0.1:1/webhooks/inbound" });
+    const res = await post(`${loneBase}/simulate/inbound`, { from: "+15551234567", body: "hi" });
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).accepted, false);
+    const hz1 = await (await fetch(`${loneBase}/healthz`)).json();
+    assert.ok(hz1.queued >= 1);
+    await post(`${loneBase}/subscriptions`, { url: `${sinkBase}/webhooks/inbound` });
+    await app.retryUndelivered();
+    assert.equal(sinkReceived.length, 1);
+    assert.equal(sinkReceived[0].from, "+15551234567");
+    assert.equal(sinkReceived[0].body, "hi");
+    assert.equal(sinkReceived[0].channel, "imessage");
+    assert.ok(sinkReceived[0].externalId);
+    const hz2 = await (await fetch(`${loneBase}/healthz`)).json();
+    assert.equal(hz2.queued, 0);
+    await app.retryUndelivered();
+    assert.equal(sinkReceived.length, 1);
+  } finally {
+    lone.close();
+    sink.close();
+  }
+});
+
 test("ambimail send retries once on a 5xx or network blip", async () => {
   const { createTransport } = require("../transports.js");
   let hits = 0;

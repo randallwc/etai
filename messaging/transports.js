@@ -18,6 +18,7 @@ function bluebubbles(env) {
             tempGuid: `etai-${randomUUID()}`,
             message: body,
           }),
+          signal: AbortSignal.timeout(15_000),
         },
       );
       if (!res.ok) {
@@ -69,6 +70,7 @@ function ambimail(env) {
                 body_markdown: body,
                 body_text: body,
               }),
+              signal: AbortSignal.timeout(Number(env.MAIL_FETCH_TIMEOUT_MS ?? 15_000)),
             }).catch(() => null);
             if (res && (res.ok || res.status < 500)) break;
             if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
