@@ -144,6 +144,21 @@ describe("handleRequest", () => {
     );
   });
 
+  it("strips markdown from assistant replies", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "POST /assistant/chat": () => ({
+          response:
+            'Try instead: - **"Will it run?"** - _"Is it up?"_ — `so soon`',
+        }),
+      })
+    );
+    const m = await loadModule("ak_test");
+    const reply = await m.handleRequest("how should I phrase this?");
+    expect(reply).toBe('Try instead: "Will it run?" "Is it up?" - so soon');
+  });
+
   it("falls back to a task when the assistant has no reply", async () => {
     vi.stubGlobal(
       "fetch",

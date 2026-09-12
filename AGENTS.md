@@ -41,17 +41,17 @@ where the work is already happening?
 1. Keep documents in `./docs`, unix format, no tables. Prose summaries
    of each external part; document gotchas and tried-and-rejected
    approaches so others can learn.
-1. Never over-engineer. KISS — ponytail rules (adapted from
+1. Never over-engineer. KISS - ponytail rules (adapted from
    github.com/dietrichgebert/ponytail). Lazy senior dev: the best code
    is the code never written. Before writing code, stop at the first
    rung that holds: does this need to exist at all (speculative need =
    skip it, say so in one line); already in this codebase (reuse the
-   helper or pattern — look before you write); stdlib does it; native
+   helper or pattern - look before you write); stdlib does it; native
    platform feature covers it (`input[type=date]` over a picker lib,
    css over js, db constraint over app code); installed dependency
    solves it (never add a new one for what a few lines can do); one
    line; only then the minimum code that works. The ladder runs after
-   you understand the problem, not instead of it — read the code the
+   you understand the problem, not instead of it - read the code the
    change touches and trace the real flow first. Bug fix = root cause,
    not symptom: grep every caller of the function you touch; one guard
    in the shared function beats a guard per caller. No unrequested
@@ -61,7 +61,7 @@ where the work is already happening?
    possible. Two same-size options: take the one correct on edge cases.
    A deliberate simplification with a known ceiling (global lock, O(n²)
    scan, naive heuristic) gets named in the commit message or docs with
-   its upgrade path — rule 1 still bans the comment. Never simplify
+   its upgrade path - rule 1 still bans the comment. Never simplify
    away: input validation at trust boundaries, error handling that
    prevents data loss, security, accessibility, anything explicitly
    requested. User insists on the full version: build it.
@@ -75,7 +75,7 @@ where the work is already happening?
 
 A **call-your-agent** web app on top of Ambiguous.ai. The user opens the
 app and is immediately in a FaceTime-style call with a personal agent.
-The agent offers a day summary or takes requests — scheduling requests
+The agent offers a day summary or takes requests - scheduling requests
 book real calendar events after checking free/busy availability; other
 requests become tasks. On hang up, the full transcript is stored in the
 workspace as a document so coworkers can validate what was agreed.
@@ -95,7 +95,7 @@ draggable picture-in-picture tile.
 ├── LICENSE
 ├── package.json               root test script: node --test '*/tests/*.test.js'
 ├── .githooks/pre-commit       runs root npm test (core.hooksPath=.githooks)
-├── models/                    JSON Schemas for every data shape — schema
+├── models/                    JSON Schemas for every data shape - schema
 │                              first, before code that touches it.
 │                              Tests in models/tests/ validate all files.
 ├── docs/                      prose documentation, unix format, no tables
@@ -108,7 +108,7 @@ draggable picture-in-picture tile.
 ├── Makefile                   delegates to per-component Makefiles
 ├── calendar-agent/            Ambiguous Assistant chat smoke script
 │   └── tests/
-├── bus/                     the agent core — texts and voice turns
+├── bus/                     the agent core - texts and voice turns
 │   │                          in, Ambiguous calls, replies out.
 │   │                          Docs: docs/bus.md
 │   ├── index.js               HTTP + wiring (createBusServer)
@@ -136,7 +136,7 @@ draggable picture-in-picture tile.
         ├── App.jsx            console shell: board, job detail, call overlay
         ├── agents.js          the single etAI persona
         ├── styles.css         all styling, CSS custom properties
-        ├── api/ambiguous.js   THE Ambiguous boundary — only file with fetch
+        ├── api/ambiguous.js   THE Ambiguous boundary - only file with fetch
         ├── lib/parseRequest.js request classification, done-detection,
         │                      offline replies
         ├── lib/schedule.js    free/busy slot math, time formatting
@@ -151,7 +151,7 @@ Every component has a Makefile; the root one delegates (`make test`,
 `make run-messaging`, `make run-bus`, `make frontend-build`,
 `make frontend-test`, `make -C <dir> test`).
 
-Root tests (backend, node:test): `npm test` from repo root — the glob is
+Root tests (backend, node:test): `npm test` from repo root - the glob is
 `'*/tests/*.test.js'`; `node --test <dir>` does not discover tests.
 Messaging service: `make run-messaging` (PORT, default 4020)
 Bus service: `make run-bus` (PORT, default 4010)
@@ -160,18 +160,18 @@ Install deps: `cd frontend && npm install`
 Dev server: `cd frontend && npm run dev`
 Build: `cd frontend && npm run build`
 Frontend tests: `cd frontend && npm test`
-Ambiguous CLI: `npx ambiguous@latest catalog` (from repo root — uses
+Ambiguous CLI: `npx ambiguous@latest catalog` (from repo root - uses
 ./.ambi/config.json)
 
 Verify any backend change with root `npm test`; verify any frontend
 change with `npm run build` and `npm test` before considering it done.
-Note: the commit hook runs only root `npm test` — run the frontend
+Note: the commit hook runs only root `npm test` - run the frontend
 suite yourself before committing frontend changes.
 
 ## 5. Sub-agent roles
 
 When parallelizing work, split along these boundaries. Each role owns its
-files exclusively — never let two agents edit the same file.
+files exclusively - never let two agents edit the same file.
 
 ### 5.1 Frontend UI Agent
 Owns `frontend/src/components/` and `frontend/src/styles.css`. Builds the
@@ -195,14 +195,14 @@ gracefully when no API key is set.
 ### 5.4 Media / Voice Agent
 Owns the agent visual surface and audio I/O: the orb (or video later),
 mic to STT, TTS to speaker, and the phone-call layer. For call
-intelligence, do NOT rebuild scheduling logic — POST each caller turn
+intelligence, do NOT rebuild scheduling logic - POST each caller turn
 to the agent service's `POST /voice/turn` ({from, body} -> {reply} to
 speak); notifications to the other party go out over messaging
 automatically. Contract in docs/bus.md. Keep `AgentSurface`'s props
 (`agent`, `speaking`) stable.
 
 ### 5.5 Messaging / Phone Agent
-Owns `messaging/` — the phone service behind the docs/PHONE.md
+Owns `messaging/` - the phone service behind the docs/PHONE.md
 contract. Transports (BlueBubbles, sim, ambimail, LoopMessage/Twilio if
 added) live in `transports.js`; normalization in `normalize.js`;
 fanout/dedup in `index.js`. Invariant: subscribers only ever see the
@@ -238,7 +238,7 @@ applies here too: one file fetches Ambiguous.
 
 ## 7. Ambiguous.ai reference
 
-Full details live in docs/ambiguous-integration.md — verified endpoint
+Full details live in docs/ambiguous-integration.md - verified endpoint
 shapes, gotchas (provisional workspace blocks provisioning until the
 human verifies; coworkers dispatch needs a service id that only
 persona-backed coworkers have), and approaches we tried and rejected.

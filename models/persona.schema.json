@@ -25,7 +25,7 @@
         "pitch": { "type": "number", "minimum": 0, "maximum": 2 },
         "rate": { "type": "number", "minimum": 0.5, "maximum": 2 }
       },
-      "description": "speechSynthesis utterance tuning — gives each agent a distinct voice"
+      "description": "speechSynthesis utterance tuning - gives each agent a distinct voice"
     }
   }
 }

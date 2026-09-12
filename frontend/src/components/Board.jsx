@@ -2,12 +2,18 @@ const RESOLVED = new Set(["done", "canceled"]);
 
 export function fmtWindow(w) {
   if (!w?.start) return "";
+  const day = new Date(w.start).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
   const fmt = (d) =>
     new Date(d).toLocaleTimeString(undefined, {
       hour: "numeric",
       minute: "2-digit",
     });
-  return w.end ? `${fmt(w.start)}–${fmt(w.end)}` : fmt(w.start);
+  const span = w.end ? `${fmt(w.start)}–${fmt(w.end)}` : fmt(w.start);
+  return `${day} · ${span}`;
 }
 
 function JobRow({ job, customer, selected, onSelect }) {

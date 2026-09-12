@@ -139,10 +139,10 @@ sequenceDiagram
     Agent->>State: Save shifted window and new ETA
     Agent->>Messaging: POST /send: new ETA to affected client
     Messaging->>Transport: Send text
-    Transport->>Client: "Running about 20 min late — new ETA ..."
+    Transport->>Client: "Running about 20 min late - new ETA ..."
     Agent->>Messaging: POST /send: update confirmation
     Messaging->>Transport: Send text
-    Transport->>Contractor: "Updated — shifted the job and let them know."
+    Transport->>Contractor: "Updated - shifted the job and let them know."
 ```
 
 ## Components
@@ -161,7 +161,7 @@ Callers send replies through `POST /send` with `to`, `body`, and `threadKey`. Th
 
 `agent/calendar.js` exposes availability, day listing, create, update, and cancel operations to the scheduling loop. It calls Ambiguous through `agent/ambiguous.js`, the only backend file that fetches Ambiguous. Without an API key, the adapter uses an in-memory calendar so the same workflow can run offline.
 
-The Ambiguous workspace is the system of record for events, CRM, tasks, and documents. Its Assistant returns a structured intent for each message; the agent loop—not the Assistant—then selects available slots and makes calendar changes. `calendar-agent/` remains a smoke-script and calendar-notification integration.
+The Ambiguous workspace is the system of record for events, CRM, tasks, and documents. Its Assistant returns a structured intent for each message; the agent loop - not the Assistant - then selects available slots and makes calendar changes. `calendar-agent/` remains a smoke-script and calendar-notification integration.
 
 ### Optional notification bridge
 

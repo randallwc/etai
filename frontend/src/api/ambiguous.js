@@ -34,7 +34,7 @@ export function coworkerToPersona(user, i = 0) {
     greeting: `Hey, ${name} here. Day summary, or are we adding something new?`,
     summary: null,
     taskAck:
-      "Done — it's in Ambiguous now. I'll work it into your schedule.",
+      "Done - it's in Ambiguous now. I'll work it into your schedule.",
     skills: user.focus_areas?.slice(0, 3) ?? ["scheduling", "tasks"],
     voice: { pitch: 0.85 + (i % 5) * 0.12, rate: 1 },
   };
@@ -186,7 +186,18 @@ async function scheduleMeeting(req) {
       ? ` Heads up, ${req.withName} isn't in the workspace yet, so no invite went out.`
       : "";
   const summary = summarizeChecks(checks);
-  return `Done — booked for ${formatSlot(slot)}${who ? ` with ${who}` : ""}. ${summary ? summary + " " : ""}${caveat}Is that all?`;
+  return `Done - booked for ${formatSlot(slot)}${who ? ` with ${who}` : ""}. ${summary ? summary + " " : ""}${caveat}Is that all?`;
+}
+
+function plainReply(text) {
+  return text
+    .replace(/(\*\*|__)([\s\S]*?)\1/g, "$2")
+    .replace(/([*_`])([\s\S]*?)\1/g, "$2")
+    .replace(/^[ \t]*(?:[-*•]|\d{1,2}[.)])[ \t]+/gm, "")
+    .replace(/^#{1,6}[ \t]+/gm, "")
+    .replace(/\s-\s(?=["'])/g, " ")
+    .replace(/—/g, "-")
+    .trim();
 }
 
 /**
@@ -207,14 +218,14 @@ export async function handleRequest(text) {
   })
     .then((r) => r.response)
     .catch(() => null);
-  if (reply) return reply;
+  if (reply) return plainReply(reply);
   const task = await createTask(text);
-  return `Done — task "${task?.title ?? text}" is in Ambiguous. Is that all?`;
+  return `Done - task "${task?.title ?? text}" is in Ambiguous. Is that all?`;
 }
 
 /**
  * Store the finished call transcript as a workspace document so coworkers
- * can read and validate it. Never throws — check `ok` on the result.
+ * can read and validate it. Never throws - check `ok` on the result.
  */
 export async function sendConversation({ agentId, transcript, endedAt }) {
   if (!ambiguousEnabled) return { ok: true, mocked: true };
@@ -223,7 +234,7 @@ export async function sendConversation({ agentId, transcript, endedAt }) {
       method: "POST",
       body: JSON.stringify({
         type: "doc",
-        title: `Call transcript — ${endedAt}`,
+        title: `Call transcript - ${endedAt}`,
         content: `Call with coworker ${agentId}\nEnded ${endedAt}\n\n${transcript}`,
       }),
     });

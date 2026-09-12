@@ -42,7 +42,7 @@ POST /api/calendars/:calendar_id/events with {title, start_at, end_at,
 attendees: [{user_id}]} creates the meeting. The organizer is added as an
 attendee automatically.
 
-POST /api/tasks with {title} returns {task: {...}} — note the task object
+POST /api/tasks with {title} returns {task: {...}} - note the task object
 is wrapped in a "task" key, not returned bare.
 
 POST /api/documents with {type: "doc", title, content} stores the call
@@ -56,7 +56,7 @@ Gotchas
 A fresh workspace is "provisional" until the human owner clicks the
 verification link sent at signup. Provisioning more agents
 (POST /api/admin/users/provision-agent) returns 403 workspace_provisional
-until then. The primary agent works immediately — tasks, calendar, docs,
+until then. The primary agent works immediately - tasks, calendar, docs,
 chat all function.
 
 coworkers dispatch requires a coworker_service_id, which only exists on
@@ -83,7 +83,7 @@ Approaches considered
 MCP was rejected for the call UI: it is a tool-calling transport for
 agent runtimes, not a request/response API a browser should hold a key
 for. The CLI shells out per call and cannot run in the browser. Plain
-REST over fetch won — one module, no dependencies.
+REST over fetch won - one module, no dependencies.
 
 Storing the transcript as a task was considered; a document won because
 the transcript is prose meant for review, and documents render natively
@@ -98,4 +98,4 @@ Once the human verifies the workspace, run:
     -d '{"display_name": "Nova"}'
 
 per persona. They appear in GET /api/users with type "agent" and the app
-picks them up on next load — no code change needed.
+picks them up on next load - no code change needed.
