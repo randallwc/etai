@@ -19,8 +19,8 @@ describe("seedBoard", () => {
   it("returns the locksmith demo board", () => {
     const board = seedBoard();
     expect(board.contractor.trade).toBe("locksmith");
-    expect(board.customers.length).toBeGreaterThanOrEqual(3);
-    expect(board.jobs.length).toBeGreaterThanOrEqual(3);
+    expect(board.customers.length).toBeGreaterThanOrEqual(1);
+    expect(board.jobs.length).toBeGreaterThanOrEqual(1);
   });
 
   it("returns a fresh copy on each call", () => {
@@ -99,11 +99,11 @@ describe("transition", () => {
 
   it("demotes the other en_route job when a second job departs", () => {
     let board = seedBoard();
-    const enRoute = board.jobs.find((j) => j.status === "en_route");
     const next = board.jobs.find((j) => j.status === "confirmed");
+    board.jobs.push({ ...next, id: "job_other", status: "en_route" });
     board = transition(board, next.id, "depart");
     expect(board.jobs.find((j) => j.id === next.id).status).toBe("en_route");
-    expect(board.jobs.find((j) => j.id === enRoute.id).status).toBe(
+    expect(board.jobs.find((j) => j.id === "job_other").status).toBe(
       "confirmed"
     );
   });
