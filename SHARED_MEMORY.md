@@ -45,21 +45,30 @@ VERIFIED AMBIGUOUS API (live-tested 2026-09-12, workspace etai-workspace)
 -------------------------------------------------------------------------
 
   Base https://app.ambiguous.ai/api, Authorization: Bearer ak_...
+  Live OpenAPI 3.1 spec: https://app.ambiguous.ai/api/openapi.json
+  (939 paths -- consult it before writing any new call)
   GET  /api/users                                  roster (type agent|human)
   GET  /api/calendars                              list; use is_default
   GET  /api/calendars/events?start=&end=           day summary source
   GET  /api/calendars/availability?user_ids=&start=&end=   busy slots; []=free
   POST /api/calendars/:calendar_id/events          {title,start_at,end_at,attendees:[{user_id}]}
+  PATCH/DELETE /api/calendars/events/{id}          update/cancel events
   POST /api/tasks                                  {title} -> {task:{...}}
   POST /api/documents                              {type:"doc",title,content}
-  MCP endpoint exists at https://app.ambiguous.ai/mcp
+  GET,POST /api/crm/contacts                       customer records
+  POST /api/mail/send                              email notifications
+  GET,POST /api/webhooks  +  GET /api/webhooks/event-types   push to us
+  /api/calendars/external/*                        Google/Outlook sync exists
+  POST /api/assistant/chat (+ /chat/stream, /api/assistant/conversations)
+  MCP endpoint exists at https://app.ambiguous.ai/mcp (401 without key)
 
 LANDMINES
 ---------
 
-  - POST /api/assistant/chat is NOT in the live OpenAPI catalog.
-    calendar-agent/test.js targets it and is stale; compose primitives
-    (users + availability + events) instead. Do not extend that script.
+  - assistant/chat status is disputed: docs/ambiguous-integration.md says
+    it was absent from the catalog, but it IS in today's live spec
+    (/api/openapi.json). If it errors at runtime, compose the verified
+    primitives (users + availability + events) like frontend/api does.
   - Fresh workspaces are "provisional": provision-agent 403s until the
     human owner clicks the verification email. The signup agent works.
   - coworkers dispatch needs coworker_service_id, only present on
