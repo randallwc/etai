@@ -3,7 +3,7 @@ import { firstFreeSlot, formatSlot } from "../lib/schedule.js";
 import { runChecks, summarizeChecks } from "../lib/checks.js";
 import { geocode, driveMinutes, precipAt } from "./lookup.js";
 
-const BASE = "https://app.ambiguous.ai/api";
+const BASE = import.meta.env.DEV ? "/api" : "https://app.ambiguous.ai/api";
 const KEY = import.meta.env.VITE_AMBIGUOUS_API_KEY;
 
 export const ambiguousEnabled = Boolean(KEY);
