@@ -18,6 +18,14 @@ calendar window before creating and uses the default calendar (or the first
 available calendar). The event object returned by Ambiguous is included on
 success.
 
+To move an existing event, call rescheduleEventFromText(text) with:
+
+    event-id | 2026-09-14T13:00:00-07:00 | 60m
+
+It checks the surrounding calendar before the write, ignores the event being
+moved, and returns updated, conflict, or invalid. The caller must supply the
+Ambiguous event id returned when the event was created or listed.
+
 Text is not sent to an LLM. Relative dates, vague times, attendee resolution,
 and automatic rescheduling are intentionally rejected until a caller turns
 them into the explicit text shape above. This prevents an unintended write to
