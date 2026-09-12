@@ -1,4 +1,5 @@
 const http = require("node:http");
+const { readFileSync, writeFileSync } = require("node:fs");
 const { createTransport } = require("./transports");
 const { createMailPoller } = require("./mailpoller");
 const { fromBlueBubbles, fromSim, fromAmbiguousMail, toE164 } = require("./normalize");
@@ -9,6 +10,16 @@ const RETRY_CAP = 500;
 const MAX_BODY = 1 << 20;
 const PREFIX = "etAI update: ";
 
+function loadUndelivered(file) {
+  try {
+    const data = JSON.parse(readFileSync(file, "utf8"));
+    if (!Array.isArray(data)) return [];
+    return data.filter((u) => u?.message?.externalId);
+  } catch {
+    return [];
+  }
+}
+
 function createMessagingServer(env = process.env) {
   const transport = createTransport(env);
   const fetchTimeout = Number(env.FETCH_TIMEOUT_MS ?? 8000);
@@ -18,7 +29,8 @@ function createMessagingServer(env = process.env) {
   }
   const seen = new Set();
   const recent = [];
-  const undelivered = [];
+  const undeliveredFile = env.UNDELIVERED_FILE ?? "/tmp/etai-undelivered.json";
+  const undelivered = loadUndelivered(undeliveredFile);
   const retryMs = Number(env.FANOUT_RETRY_MS ?? 5000);
   const retryMax = Number(env.FANOUT_RETRY_MAX ?? 24);
   const allowedFrom = new Set(
@@ -28,6 +40,14 @@ function createMessagingServer(env = process.env) {
       .filter(Boolean)
       .map(toE164),
   );
+
+  function saveUndelivered() {
+    try {
+      writeFileSync(undeliveredFile, JSON.stringify(undelivered));
+    } catch (e) {
+      console.error(`undelivered save to ${undeliveredFile} failed: ${e.message}`);
+    }
+  }
 
   function record(message) {
     if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
@@ -67,7 +87,10 @@ function createMessagingServer(env = process.env) {
     if (seen.has(message.externalId) || inflight.has(message.externalId))
       return { message, duplicate: true };
     const queued = undelivered.findIndex((u) => u.message.externalId === message.externalId);
-    if (queued >= 0) undelivered.splice(queued, 1);
+    if (queued >= 0) {
+      undelivered.splice(queued, 1);
+      saveUndelivered();
+    }
     inflight.add(message.externalId);
     let delivered;
     try {
@@ -78,6 +101,7 @@ function createMessagingServer(env = process.env) {
     if (!delivered) {
       undelivered.push({ message, attempts: 0 });
       if (undelivered.length > RETRY_CAP) undelivered.shift();
+      saveUndelivered();
       return null;
     }
     record(message);
@@ -85,11 +109,13 @@ function createMessagingServer(env = process.env) {
   }
 
   async function retryUndelivered() {
+    let changed = false;
     for (let i = undelivered.length - 1; i >= 0; i--) {
       const u = undelivered[i];
       if (!u || inflight.has(u.message.externalId)) continue;
       if (seen.has(u.message.externalId)) {
         undelivered.splice(i, 1);
+        changed = true;
         continue;
       }
       inflight.add(u.message.externalId);
@@ -107,7 +133,9 @@ function createMessagingServer(env = process.env) {
         if (idx >= 0) undelivered.splice(idx, 1);
         console.error(`dropping ${u.message.externalId}: undeliverable after ${retryMax} retries`);
       }
+      changed = true;
     }
+    if (changed) saveUndelivered();
   }
 
   function readBody(req) {
@@ -148,12 +176,21 @@ function createMessagingServer(env = process.env) {
     const url = new URL(req.url, "http://localhost");
     const path = url.pathname;
     if (req.method === "GET" && path === "/healthz") {
-      return reply(res, 200, {
+      const health = {
         ok: true,
         transport: transport.name,
         subscribers: subscribers.size,
         queued: undelivered.length,
-      });
+      };
+      if (allowedFrom.size) health.allowed = allowedFrom.size;
+      if (
+        allowedFrom.size &&
+        env.CONTRACT_PHONE &&
+        !allowedFrom.has(toE164(env.CONTRACT_PHONE))
+      ) {
+        health.warn = "CONTRACT_PHONE is not in ALLOWED_FROM";
+      }
+      return reply(res, 200, health);
     }
     if (req.method === "GET" && path === "/messages") {
       return reply(res, 200, { messages: recent });

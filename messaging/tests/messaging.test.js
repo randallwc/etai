@@ -1,7 +1,14 @@
 const assert = require("node:assert/strict");
 const http = require("node:http");
+const os = require("node:os");
+const path = require("node:path");
+const fs = require("node:fs");
+const { randomUUID } = require("node:crypto");
 const { test, before, after } = require("node:test");
 const { createMessagingServer } = require("../index.js");
+
+const queueFile = () =>
+  path.join(os.tmpdir(), `etai-undelivered-test-${randomUUID()}.json`);
 
 let messaging, upstream, base, upstreamBase;
 const received = [];
@@ -27,7 +34,7 @@ before(async () => {
   await new Promise((r) => upstream.listen(0, r));
   upstreamBase = `http://127.0.0.1:${upstream.address().port}`;
 
-  messaging = createMessagingServer({}).server;
+  messaging = createMessagingServer({ UNDELIVERED_FILE: queueFile() }).server;
   await new Promise((r) => messaging.listen(0, r));
   base = `http://127.0.0.1:${messaging.address().port}`;
 
@@ -132,6 +139,7 @@ test("a hanging subscriber fails the fanout fast instead of stalling the ack", a
   const srv = createMessagingServer({
     FETCH_TIMEOUT_MS: "80",
     UPSTREAM_URL: `http://127.0.0.1:${hung.address().port}`,
+    UNDELIVERED_FILE: queueFile(),
   }).server;
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
   const loneBase = `http://127.0.0.1:${srv.address().port}`;
@@ -153,6 +161,7 @@ test("one hung subscriber does not block delivery to a healthy one", async () =>
   const srv = createMessagingServer({
     FETCH_TIMEOUT_MS: "80",
     UPSTREAM_URL: `http://127.0.0.1:${hung.address().port}`,
+    UNDELIVERED_FILE: queueFile(),
   }).server;
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
   const loneBase = `http://127.0.0.1:${srv.address().port}`;
@@ -312,6 +321,8 @@ test("healthz and /messages report live state", async () => {
   assert.equal(hz.ok, true);
   assert.equal(hz.transport, "sim");
   assert.ok(hz.subscribers >= 1);
+  assert.equal(hz.allowed, undefined);
+  assert.equal(hz.warn, undefined);
   const { messages } = await (await fetch(`${base}/messages`)).json();
   assert.ok(messages.some((m) => m.externalId === "ambmail-mail-9"));
 });
@@ -322,7 +333,7 @@ test("subscriptions rejects a non-http url", async () => {
 });
 
 test("inbound with no subscriber is refused, then delivered when one appears", async () => {
-  const lone = createMessagingServer({}).server;
+  const lone = createMessagingServer({ UNDELIVERED_FILE: queueFile() }).server;
   await new Promise((r) => lone.listen(0, r));
   const loneBase = `http://127.0.0.1:${lone.address().port}`;
   try {
@@ -348,7 +359,7 @@ test("inbound with no subscriber is refused, then delivered when one appears", a
 });
 
 test("simulate inbound reports 503 when no subscriber accepts", async () => {
-  const lone = createMessagingServer({}).server;
+  const lone = createMessagingServer({ UNDELIVERED_FILE: queueFile() }).server;
   await new Promise((r) => lone.listen(0, r));
   const loneBase = `http://127.0.0.1:${lone.address().port}`;
   try {
@@ -361,7 +372,11 @@ test("simulate inbound reports 503 when no subscriber accepts", async () => {
 });
 
 test("queued inbound reaches a late subscriber exactly once via retryUndelivered", async () => {
-  const app = createMessagingServer({ FANOUT_RETRY_MS: 60000, FANOUT_RETRY_MAX: 5 });
+  const app = createMessagingServer({
+    FANOUT_RETRY_MS: 60000,
+    FANOUT_RETRY_MAX: 5,
+    UNDELIVERED_FILE: queueFile(),
+  });
   const lone = app.server;
   await new Promise((r) => lone.listen(0, r));
   const loneBase = `http://127.0.0.1:${lone.address().port}`;
@@ -430,7 +445,11 @@ test("ALLOWED_FROM filters non-allowed senders before fanout", async () => {
     });
   });
   await new Promise((r) => sink.listen(0, r));
-  const app = createMessagingServer({ ALLOWED_FROM: "+15551112222" });
+  const app = createMessagingServer({
+    ALLOWED_FROM: "+15551112222",
+    CONTRACT_PHONE: "+15553334444",
+    UNDELIVERED_FILE: queueFile(),
+  });
   await new Promise((r) => app.server.listen(0, r));
   const b = `http://127.0.0.1:${app.server.address().port}`;
   try {
@@ -441,9 +460,66 @@ test("ALLOWED_FROM filters non-allowed senders before fanout", async () => {
     assert.equal(allowed.status, 202);
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(sinkReceived.length, 1);
+    const hz = await (await fetch(`${b}/healthz`)).json();
+    assert.equal(hz.allowed, 1);
+    assert.equal(hz.warn, "CONTRACT_PHONE is not in ALLOWED_FROM");
   } finally {
     app.server.close();
     app.poller?.stop?.();
     sink.close();
+  }
+});
+
+test("queued inbound survives a restart via UNDELIVERED_FILE", async () => {
+  const file = queueFile();
+  const first = createMessagingServer({
+    FANOUT_RETRY_MS: 60000,
+    UNDELIVERED_FILE: file,
+  });
+  await new Promise((r) => first.server.listen(0, r));
+  const firstBase = `http://127.0.0.1:${first.server.address().port}`;
+  try {
+    const res = await post(`${firstBase}/simulate/inbound`, {
+      from: "+15551234567",
+      body: "still there?",
+    });
+    assert.equal(res.status, 503);
+    const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].message.body, "still there?");
+    assert.equal(saved[0].attempts, 0);
+  } finally {
+    first.server.close();
+  }
+
+  const sinkReceived = [];
+  const sink = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      sinkReceived.push(JSON.parse(Buffer.concat(chunks)));
+      res.writeHead(202, { "content-type": "application/json" });
+      res.end("{}");
+    });
+  });
+  await new Promise((r) => sink.listen(0, r));
+  const second = createMessagingServer({
+    FANOUT_RETRY_MS: 60000,
+    UPSTREAM_URL: `http://127.0.0.1:${sink.address().port}`,
+    UNDELIVERED_FILE: file,
+  });
+  await new Promise((r) => second.server.listen(0, r));
+  const secondBase = `http://127.0.0.1:${second.server.address().port}`;
+  try {
+    const hz = await (await fetch(`${secondBase}/healthz`)).json();
+    assert.equal(hz.queued, 1);
+    await second.retryUndelivered();
+    assert.equal(sinkReceived.length, 1);
+    assert.equal(sinkReceived[0].body, "still there?");
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), []);
+  } finally {
+    second.server.close();
+    sink.close();
+    fs.rmSync(file, { force: true });
   }
 });

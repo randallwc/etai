@@ -7,42 +7,23 @@ assumptions broke and why. This file is the short list of what is left.
 NOW (correctness, do these first)
 ---------------------------------
 
-  1. TTL the rest of the pending state. PROPOSAL_TTL_MS covers
-     pendingProposal and pendingBook; pendingClarify and pendingDedup
-     still wedge a thread forever if the client never answers. Same
-     fix shape, top of handle() in bus/loop.js.
-
-  2. Persist the undelivered queue. messaging/index.js queues inbound
-     it cannot fan out, but the queue is in-memory -- a messaging
-     crash loses it. Mail survives via unread-retry; sim/BlueBubbles
-     webhooks do not. Either a JSON spool file next to state or mark
-     upstream mail unread on crash.
-
-  3. Prove pushSoon end-to-end. Local writes flush to Ambiguous on
-     setImmediate now (bus/calendar.js); no test yet asserts create ->
-     remote POST without calling sync() first.
-
-  4. Pick one carrier-gateway config. CARRIER_GATEWAYS (JSON map) and
-     GATEWAY_MAP (blast list) overlap in messaging/transports.js.
-     Decide which wins, delete the other.
-
 SOON (demo-critical)
 --------------------
 
-  5. /tts returns 503: msedge-tts is lazily required but not in
+  1. /tts returns 503: msedge-tts is lazily required but not in
      package.json. Add the dependency or drop the endpoint before a
      demo that plays audio.
 
-  6. frontend/.env.local is missing (VITE_AMBIGUOUS_API_KEY,
+  2. frontend/.env.local is missing (VITE_AMBIGUOUS_API_KEY,
      VITE_MESSAGING_URL) -- the dispatcher board cannot run until it
      exists.
 
-  7. ALLOWED_FROM filters inbound to the demo phone. CONTRACT_PHONE is
+  3. ALLOWED_FROM filters inbound to the demo phone. CONTRACT_PHONE is
      the same number today, so contractor texts still get through --
      the moment the contractor uses another phone they are filtered
      too. Either allowlist both numbers or drop the filter post-demo.
 
-  8. Turn-timeout reply quality: when the 30s turn timeout fires the
+  4. Turn-timeout reply quality: when the 30s turn timeout fires the
      caller gets the generic "recorded shortly" text even though the
      turn often completes moments later. Consider re-sending the real
      reply when it lands, or raising the timeout.
@@ -50,28 +31,38 @@ SOON (demo-critical)
 LATER (known gaps, not blocking)
 --------------------------------
 
-  9. Open-spot re-offer: on cancel/move, clients waiting on that day
+  5. Open-spot re-offer: on cancel/move, clients waiting on that day
      should be offered the freed slot. Spec in docs/PLAN.md item 3.
 
- 10. /webhooks/calendar only texts the contractor. Client-facing
+  6. /webhooks/calendar only texts the contractor. Client-facing
      updates from calendar events are not routed through
      loop.clientUpdate yet.
 
- 11. mailpoller re-skips non-gateway mail (7f93a441) every poll and
-     never marks it read -- noise now, cost as the inbox fills.
-
- 12. Non-Verizon inbound channel: ambimail is Verizon-only, no
+   7. Non-Verizon inbound channel: ambimail is Verizon-only, no
      delivery receipts, gateway dies ~March 2027. BlueBubbles needs a
      Mac; Twilio is the fallback.
 
- 13. npm audit: 7 vulns on main, 1 critical. Untriaged.
+  8. npm audit: 7 vulns on main, 1 critical. Untriaged.
 
- 14. Turn-queue timeout: enqueue() in bus/index.js rejects a turn at
+  9. Turn-queue timeout: enqueue() in bus/index.js rejects a turn at
      30s but the underlying handle() keeps running -- a slow Ambiguous
      call still holds the thread chain.
 
 DONE AND VERIFIED (for context, not to redo)
 --------------------------------------------
+
+  - pendingClarify and pendingDedup expire on PROPOSAL_TTL_MS; no
+    pending state can wedge a thread now.
+  - Undelivered queue persists to UNDELIVERED_FILE
+    (models/undelivered-queue.schema.json); a messaging crash no
+    longer loses queued inbound.
+  - pushSoon covered: createEvent pushes to Ambiguous on setImmediate,
+    sync() is backstop only (bus/tests/calendar.test.js).
+  - Carrier routing is GATEWAY_MAP only; CARRIER_GATEWAYS was removed.
+  - mailpoller marks non-gateway mail read instead of re-skipping it
+    every poll.
+  - /healthz reports the allowlist size and warns when CONTRACT_PHONE
+    is not in ALLOWED_FROM.
 
   - Per-thread turn queues replace the global lock (bus/index.js).
   - 1.5s "On it" working beat; canceled when the real reply lands.

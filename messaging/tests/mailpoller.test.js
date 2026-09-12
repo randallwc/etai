@@ -108,6 +108,7 @@ describe("poller integration", () => {
       AMBIG_API: "ak_test",
       MAIL_POLL_SECONDS: "3600",
       UPSTREAM_URL: `http://127.0.0.1:${upstream.address().port}`,
+      UNDELIVERED_FILE: `/tmp/etai-undelivered-test-${mailItem.id}.json`,
     });
     assert.ok(mailPoller);
     try {
@@ -168,6 +169,26 @@ describe("poller integration", () => {
     );
     await poller.pollOnce();
     assert.equal(emitted.length, 0);
+  });
+
+  test("pollOnce marks non-gateway mail read so it stops being refetched", async () => {
+    inbox.length = 0;
+    inbox.push(
+      { ...mailItem, id: "human-mail-2", from: { email: "boss@gmail.com" } },
+    );
+    const patchedBefore = patched.length;
+    const emitted = [];
+    const poller = createMailPoller(
+      { AMBIG_API: "ak_test", MAIL_POLL_SECONDS: "3600" },
+      async (m) => emitted.push(m) && m,
+    );
+    await poller.pollOnce();
+    assert.equal(emitted.length, 0);
+    assert.ok(patched.some((u) => u.includes("/api/mail/human-mail-2")));
+    const patchedAfter = patched.length;
+    await poller.pollOnce();
+    assert.equal(patched.length, patchedAfter);
+    assert.ok(patchedAfter > patchedBefore);
   });
 });
 

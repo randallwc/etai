@@ -483,6 +483,14 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, cr
         store.setThread(msg.threadKey, { pendingBook: null });
         thread.pendingBook = null;
       }
+      if (thread.pendingClarify && now() - new Date(thread.pendingClarify.at ?? 0) > PROPOSAL_TTL_MS) {
+        store.setThread(msg.threadKey, { pendingClarify: null });
+        thread.pendingClarify = null;
+      }
+      if (thread.pendingDedup && now() - new Date(thread.pendingDedup.at ?? 0) > PROPOSAL_TTL_MS) {
+        store.setThread(msg.threadKey, { pendingDedup: null });
+        thread.pendingDedup = null;
+      }
       if (thread.pendingProposal) await proposalReply(msg, thread, say);
       else if (thread.pendingBook) await bookReply(msg, thread, say);
       else {

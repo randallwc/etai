@@ -190,6 +190,44 @@ test("same-client duplicate booking warns, and a repeat asks proceeds", async ()
   }
 });
 
+test("a stale dedup warning expires: re-asking warns again instead of booking silently", async () => {
+  const { server, sent, store, inbound, until } = await serve({
+    seedJobs: [JOB_A],
+    classify: async () => ({ intent: "book", description: "sprinkler repair", dayRef: "friday" }),
+  });
+  try {
+    const job = Object.values(store.data.jobs)[0];
+    store.setThread(CLIENT, {
+      pendingDedup: { jobId: job.id, at: new Date(Date.now() - 60 * 60000).toISOString() },
+    });
+    await inbound("dx1", "need sprinkler repair friday");
+    await until(1);
+    assert.match(sent[0].body, /already have/i);
+    assert.ok(store.thread(CLIENT).pendingDedup);
+    assert.equal(store.thread(CLIENT).pendingProposal ?? null, null);
+    assert.equal(Object.keys(store.data.jobs).length, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("a stale clarify question expires instead of steering the next classify", async () => {
+  const { server, sent, store, seenCtx, inbound, until } = await serve({
+    classify: async () => ({ intent: "day_summary" }),
+  });
+  try {
+    store.setThread(CLIENT, {
+      pendingClarify: { question: "Book a new visit, or move one?", at: new Date(Date.now() - 60 * 60000).toISOString() },
+    });
+    await inbound("cx1", "what's my day?");
+    await until(1);
+    assert.equal(seenCtx[0].ctx.pending ?? null, null);
+    assert.equal(store.thread(CLIENT).pendingClarify ?? null, null);
+  } finally {
+    server.close();
+  }
+});
+
 test("an event already on the calendar refuses a duplicate create", async () => {
   const { server, sent, store, calendar, inbound, until } = await serve({
     classify: async (b) =>
