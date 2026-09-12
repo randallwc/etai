@@ -22,6 +22,26 @@ export async function voiceTurn({ from, body }) {
 }
 
 /**
+ * Ask the bus to synthesize speech (neural voice via Edge read-aloud).
+ * Never throws at the UI - resolves an audio Blob (mp3), or null when
+ * the bus is unset, unreachable, or errors; caller falls back to
+ * speechSynthesis.
+ */
+export async function synthSpeech(text) {
+  if (!BUS_URL) return null;
+  try {
+    const res = await fetch(`${BUS_URL}/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    return res.ok ? res.blob() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch the dispatch board state from the bus. Never throws at the UI -
  * resolves the parsed state object, or null when the bus is unset,
  * unreachable, or errors.

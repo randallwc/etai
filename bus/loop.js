@@ -1,4 +1,5 @@
 const { resolveDayRef } = require("./calendar.js");
+const { extractFields } = require("./ai.js");
 
 const ORDINALS = {
   first: 1, "1st": 1, second: 2, "2nd": 2, third: 3, "3rd": 3, fourth: 4, "4th": 4,
@@ -53,6 +54,27 @@ function parseChoice(body, slots, tz) {
 function orList(items) {
   if (items.length === 1) return items[0];
   return `${items.slice(0, -1).join(", ")}${items.length > 2 ? "," : ""} or ${items.at(-1)}`;
+}
+
+const WHEN_ONLY_RE =
+  /^[\s,.]*(today|tomorrow|tonight|next week|morning|afternoon|evening|noon|midnight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|at|on|the|a|an|around|about|for|please|\d{1,2}(:\d{2})?\s*(am|pm)?|\d{1,2}:\d{2}|[.,'!?-])+[\s,.!?]*$/i;
+
+function missingBook(b) {
+  const m = [];
+  if (b.mode === "book" && !b.description) m.push("what");
+  if (!b.dayRef && !b.timePref) m.push("when");
+  if (b.mode === "book" && !b.location) m.push("where");
+  return m;
+}
+
+function askFor(b) {
+  if (b.mode === "reschedule") return "When should I move it to?";
+  const q = [];
+  if (!b.description) q.push("what's the job");
+  if (!b.dayRef && !b.timePref) q.push("what day or time works");
+  if (!b.location) q.push("the address");
+  const last = q.pop();
+  return `Sure - ${q.length ? `${q.join(", ")}, and ${last}` : last}?`;
 }
 
 function optionsText(slots, dateLabel, description) {
@@ -152,6 +174,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         jobId: jobId ?? null,
         slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString() })),
         description,
+        location: intent.location ?? null,
         customerPhone: msg.from,
         createdAt: now().toISOString(),
       },
@@ -196,8 +219,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         calendar.proposeSlots({ date: slotDate, durationMinutes: durMin, count: 10 })
       )).some((s) => s.start.toISOString() === slot.start);
     if (!open) {
-      await say("That time was just taken.");
-      return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description }, p.mode, p.jobId, say);
+      await say("That time was just taken -");
+      return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description, location: p.location }, p.mode, p.jobId, say);
     }
     const customer = store.upsertCustomer(p.customerPhone, {});
     crmSync(p.customerPhone).catch(() => {});
@@ -228,7 +251,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         title: `${p.description} - ${custName ?? p.customerPhone}`,
         start: slot.start,
         end: slot.end,
-        description: `${p.description}\nClient: ${custName ?? "unknown"} ${p.customerPhone}`,
+        location: p.location,
+        description: `${p.description}\nClient: ${custName ?? "unknown"} ${p.customerPhone}${p.location ? `\nWhere: ${p.location}` : ""}`,
       })
     );
     store.addJob({
@@ -345,6 +369,42 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     await tellContractor(`Client canceled ${label} - that slot is free.`);
   }
 
+  async function bookReply(msg, thread, say) {
+    const b = thread.pendingBook;
+    if (/never ?mind|nvm|forget it|cancel/i.test(msg.body)) {
+      store.setThread(msg.threadKey, { pendingBook: null });
+      return say("No problem - nothing changed.");
+    }
+    const intent = await ai.classify(msg.body);
+    const fields = extractFields(msg.body);
+    for (const k of ["description", "dayRef", "timePref", "durationMinutes", "location"]) {
+      if (!b[k]) b[k] = intent[k] ?? fields[k] ?? null;
+    }
+    if (b.mode === "book" && !WHEN_ONLY_RE.test(msg.body)) {
+      if (!b.location) b.location = msg.body;
+      else if (!b.description) b.description = msg.body;
+    }
+    if (missingBook(b).length) {
+      store.setThread(msg.threadKey, { pendingBook: b });
+      return say(askFor(b));
+    }
+    store.setThread(msg.threadKey, { pendingBook: null });
+    return propose(msg, b, b.mode, b.jobId, say);
+  }
+
+  function gatherBook(msg, intent, mode, jobId) {
+    return {
+      mode,
+      jobId: jobId ?? null,
+      description: intent.description ?? (mode === "book" && !/^(book|schedule|set up|make|add)\b/i.test(msg.body.trim()) ? msg.body : null),
+      dayRef: intent.dayRef ?? null,
+      timePref: intent.timePref ?? null,
+      durationMinutes: intent.durationMinutes ?? null,
+      location: intent.location ?? null,
+      customerPhone: msg.from,
+    };
+  }
+
   async function handle(msg) {
     const thread = store.thread(msg.threadKey) ?? { threadKey: msg.threadKey };
     store.pushHistory(msg.threadKey, "them", msg.body);
@@ -364,6 +424,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         }
       }
       if (thread.pendingProposal) await proposalReply(msg, thread, say);
+      else if (thread.pendingBook) await bookReply(msg, thread, say);
       else {
         if (thread.pendingClarify) store.setThread(msg.threadKey, { pendingClarify: null });
         const intent = await ai.classify(msg.body, {
@@ -380,8 +441,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
             store.upsertCustomer(msg.from, intent.name ? { name: intent.name } : {});
             crmSync(msg.from).catch(() => {});
             const existing = store.jobForPhone(msg.from);
-            const desc = intent.description ?? msg.body;
-            if (!isContractor(msg.from) && existing && similarDesc(existing.description, desc)) {
+            const book = gatherBook(msg, intent, "book");
+            if (!isContractor(msg.from) && existing && similarDesc(existing.description, book.description ?? msg.body)) {
               if (thread.pendingDedup) {
                 store.setThread(msg.threadKey, { pendingDedup: null });
               } else {
@@ -394,14 +455,27 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
               }
             }
             if (thread.pendingDedup) store.setThread(msg.threadKey, { pendingDedup: null });
-            await propose(msg, intent, "book", null, say);
+            if (missingBook(book).length) {
+              store.setThread(msg.threadKey, { pendingBook: book });
+              await say(askFor(book));
+            } else {
+              await propose(msg, book, "book", null, say);
+            }
             break;
           }
           case "reschedule": {
             const { job, ambiguous } = jobForIntent(msg, intent);
-            if (ambiguous) await say("Which visit should I move? Reply with the name or day.");
+            if (ambiguous) await say("Which visit should I move - reply with the job name or its day.");
             else if (!job?.ambiguousEventId) await say("I don't see a booking to move - want me to set one up?");
-            else await propose(msg, intent, "reschedule", job.id, say);
+            else {
+              const book = gatherBook(msg, intent, "reschedule", job.id);
+              if (missingBook(book).length) {
+                store.setThread(msg.threadKey, { pendingBook: book });
+                await say(askFor(book));
+              } else {
+                await propose(msg, book, "reschedule", job.id, say);
+              }
+            }
             break;
           }
           case "day_summary":
@@ -441,6 +515,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           default:
             if (/^(ok|okay|thanks|thank you|thx|ty|got it|great|perfect|sounds good|yep|yeah|yup|cool|nice)\b/.test(msg.body.trim().toLowerCase())) {
               await say("Got it, thanks!");
+            } else if (/^(bye|goodbye|that's all|thats all|all set|nothing else|nope|i'm good|im good)\b/i.test(msg.body.trim())) {
+              await say("Talk soon!");
             } else if (isContractor(msg.from) && createTask) {
               const task = await record("create_task", { title: msg.body }, () => createTask(msg.body));
               await say(`Logged as a task: "${task?.title ?? msg.body}".`);

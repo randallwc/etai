@@ -150,8 +150,13 @@ test("gateway mail in produces a reply back out to the gateway", async () => {
 
 test("a booking is proposed and confirmed entirely over sms", async () => {
   await gatewayMail("sms-2", "can you come fix my sink");
-  await waitFor(() => mailOut.some((m) => /9:00 AM/.test(m.body_markdown)));
-  const offer = mailOut.find((m) => /9:00 AM/.test(m.body_markdown));
+  await waitFor(() =>
+    mailOut.some((m) => /what day or time works, and the address/.test(m.body_markdown)),
+  );
+
+  await gatewayMail("sms-2b", "tomorrow at 22 main st");
+  await waitFor(() => mailOut.some((m) => /1\) 9:00 AM/.test(m.body_markdown)));
+  const offer = mailOut.find((m) => /1\) 9:00 AM/.test(m.body_markdown));
   assert.deepEqual(offer.to, [CLIENT_GATEWAY]);
   assert.match(offer.body_markdown, /which works/i);
 

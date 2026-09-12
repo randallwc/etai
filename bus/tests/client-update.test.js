@@ -14,7 +14,7 @@ function fakeIntent(body) {
   if (/move|resched/.test(s)) return { intent: "reschedule", dayRef: "friday" };
   if (/cancel/.test(s)) return { intent: "cancel" };
   if (/need|book|come|fix/.test(s)) {
-    return { intent: "book", dayRef: "tomorrow", description: body };
+    return { intent: "book", dayRef: "tomorrow", description: body, location: "1 Main St" };
   }
   return { intent: "other" };
 }

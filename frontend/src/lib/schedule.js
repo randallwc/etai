@@ -17,6 +17,10 @@ export function firstFreeSlot(busySlots, dayOffset, hour, now = new Date()) {
   day.setDate(day.getDate() + dayOffset);
   day.setHours(0, 0, 0, 0);
   let cursor = slotStart(dayOffset, hour, now);
+  const step = SLOT_MINUTES * 60000;
+  const earliest = new Date(now.getTime() + 15 * 60000);
+  if (cursor < earliest)
+    cursor = new Date(Math.floor(earliest.getTime() / step) * step + step);
   const dayEnd = new Date(day);
   dayEnd.setHours(WORKDAY_END, 0, 0, 0);
   while (cursor < dayEnd) {

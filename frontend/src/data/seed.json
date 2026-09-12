@@ -20,28 +20,6 @@
       "address": "5216 Ballard Ave NW, Seattle, WA 98107",
       "ambiguousCrmId": null,
       "notes": "Gate code 4421, dog in yard"
-    },
-    {
-      "id": "cust_devon",
-      "name": "Devon Park",
-      "phone": "+15552345678",
-      "address": "1408 E Republican St, Seattle, WA 98112",
-      "ambiguousCrmId": null
-    },
-    {
-      "id": "cust_priya",
-      "name": "Priya Nair",
-      "phone": "+15553456789",
-      "address": "3401 Wallingford Ave N, Seattle, WA 98103",
-      "ambiguousCrmId": null,
-      "notes": "Wants keypad deadbolt on back door too"
-    },
-    {
-      "id": "cust_owen",
-      "name": "Owen Callahan",
-      "phone": "+15554567890",
-      "address": "7046 18th Ave NE, Seattle, WA 98115",
-      "ambiguousCrmId": null
     }
   ],
   "jobs": [
@@ -57,49 +35,6 @@
       },
       "address": "5216 Ballard Ave NW, Seattle, WA 98107",
       "description": "Front-door lockout, pick deadbolt",
-      "source": "message"
-    },
-    {
-      "id": "job_rekey",
-      "customerId": "cust_devon",
-      "contractorId": "con_al",
-      "ambiguousEventId": null,
-      "status": "en_route",
-      "window": {
-        "start": "2026-09-15T10:30:00-07:00",
-        "end": "2026-09-15T11:30:00-07:00"
-      },
-      "address": "1408 E Republican St, Seattle, WA 98112",
-      "description": "Rekey three locks after move-in",
-      "source": "call",
-      "eta": "2026-09-15T10:05:00-07:00"
-    },
-    {
-      "id": "job_keypad",
-      "customerId": "cust_priya",
-      "contractorId": "con_al",
-      "ambiguousEventId": null,
-      "status": "confirmed",
-      "window": {
-        "start": "2026-09-16T13:00:00-07:00",
-        "end": "2026-09-16T14:30:00-07:00"
-      },
-      "address": "3401 Wallingford Ave N, Seattle, WA 98103",
-      "description": "Install keypad deadbolt",
-      "source": "call"
-    },
-    {
-      "id": "job_fob",
-      "customerId": "cust_owen",
-      "contractorId": "con_al",
-      "ambiguousEventId": null,
-      "status": "done",
-      "window": {
-        "start": "2026-09-14T15:00:00-07:00",
-        "end": "2026-09-14T16:00:00-07:00"
-      },
-      "address": "7046 18th Ave NE, Seattle, WA 98115",
-      "description": "Car key fob replacement",
       "source": "message"
     }
   ]

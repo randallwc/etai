@@ -75,6 +75,10 @@ its entry point -- keep it out of library code so tests stay hermetic.
   CARRIER_GATEWAY       fallback gateway domain (default vtext.com)
   CARRIER_GATEWAYS      optional JSON map of E.164 -> gateway domain,
                         checked before CARRIER_GATEWAY per recipient
+  GATEWAY_MAP           optional per-recipient override keyed on the
+                        10-digit number: num:domain[+domain...] entries,
+                        comma-separated; every listed domain is tried,
+                        only the real carrier delivers
   MAIL_POLL_SECONDS     inbox poll interval (default 15; 0 disables)
   MAIL_POLL_LIMIT       inbox page size per poll (default 20)
   FETCH_TIMEOUT_MS      ceiling on every outbound fetch -- subscriber
@@ -121,6 +125,14 @@ and corrupt the map. The seeded entries are the two demo handsets:
 +18177136090 is AT&T (txt.att.net). Add a line per known recipient; for
 unknown numbers pick the fallback to match the most likely carrier and
 accept the silent-drop risk.
+
+GATEWAY_MAP is the coarser hammer for numbers whose carrier is unknown:
+comma-separated num:domain[+domain...] entries keyed on the 10-digit
+number, and every listed domain is sent -- only the real carrier
+delivers, the rest are silent drops that cost nothing. Malformed
+entries (no colon) are ignored, never a crash. CARRIER_GATEWAYS entries
+merge into the same lookup and win per number, so pin known handsets
+there and blast unknowns via GATEWAY_MAP.
 
 TESTING THE iMESSAGE PATH
 -------------------------
@@ -189,6 +201,54 @@ still covers a mark-read failure. Polling is independent of the
 collapses an email that arrives twice. Polls are serialized: a poll that
 outlasts MAIL_POLL_SECONDS short-circuits the overlapping tick instead of
 stacking concurrent inbox scans.
+
+Measured live 2026-09-12 against etai-workspace.ambi.cc: POST /send
+returns in ~1.5 s, but the workspace holds each send in an undo window
+so sent_at lands ~5.5 s after created_at on every item -- that is when
+the carrier actually sees the mail. A simulated inbound answered by the
+bus produced the reply mail ~12 s after fanout (bus assistant classify
+is most of it), released ~5.5 s later, so in-stack latency is roughly
+18 s plus up to one poll interval inbound and both carrier hops. The
+reply leg handset -> vzwpix.com -> inbox has not been observed on a real
+phone yet; every hop after inbox is verified.
+
+Push instead of poll: Ambiguous exposes POST /api/webhooks with an
+email.received event type, https URLs only, and returns an HMAC signing
+secret. /webhooks/ambimail already exists on this service and shares the
+ambmail- dedup prefix, so registering it is the fast path once the
+service has a public https URL (a tunnel works). Until then it is not
+registered and the handler does not verify the signature.
+
+END-TO-END CHECK AGAINST THE LIVE STACK
+---------------------------------------
+
+`node scripts/e2e-phone.js` verifies the whole ambimail path while the
+services are already running: it POSTs a booking text to
+{MESSAGING_URL}/simulate/inbound as CLIENT_PHONE, confirms the message in
+GET /messages, then polls the Ambiguous workspace's sent folder
+(GET /api/mail/sent) until a new item addressed to <number>@vtext.com
+appears, and asserts the body starts with "etAI update: ". Each step
+prints PASS/FAIL and the process exits nonzero on any failure.
+
+Env vars (all default to the repo .env values):
+
+  MESSAGING_URL          messaging base (default http://localhost:4020)
+  BUS_URL                bus base (default http://localhost:4010)
+  CLIENT_PHONE           simulated sender, E.164 (default +14253625633)
+  CARRIER_GATEWAY        gateway domain matched in the mail To
+  AMBIG_API or AMBIGUOUS_API_KEY   workspace key for the mail API
+  AMBIGUOUS_BASE_URL     default https://app.ambiguous.ai
+  E2E_BODY               the text sent (default a sprinkler booking)
+  E2E_HEALTH_TIMEOUT_MS  healthz steps (default 15000)
+  E2E_INBOUND_TIMEOUT_MS inbound visibility step (default 15000)
+  E2E_MAIL_TIMEOUT_MS    sent-mail poll (default 150000)
+  E2E_POLL_MS            poll interval (default 3000)
+
+Expected latency: health and inbound steps are instant; the bus's
+assistant classify plus the mail send lands the reply in the sent folder
+in roughly 20-35 s, so a full pass takes under a minute. The mail step
+snapshots the sent folder first and only accepts new items, so reruns
+are safe.
 
 GOTCHAS
 -------

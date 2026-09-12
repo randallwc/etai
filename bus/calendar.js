@@ -36,6 +36,8 @@ function resolveDayRef(dayRef, tz, now) {
   const s = String(dayRef).trim().toLowerCase();
   if (s === "today") return today;
   if (s === "tomorrow") return addDays(today, 1);
+  if (s === "day after tomorrow") return addDays(today, 2);
+  if (s === "next week") return addDays(today, 7);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const target = WEEKDAYS.indexOf(s);
   if (target >= 0) {
@@ -77,6 +79,7 @@ function normEvent(e) {
     start: e.start ?? e.start_at,
     end: e.end ?? e.end_at,
     status: e.status ?? "confirmed",
+    ...(e.location ? { location: e.location } : {}),
   };
 }
 
@@ -90,18 +93,14 @@ function prefBounds(date, timePref, tz) {
   return [localToUtc(date, `${start}:00`, tz), localToUtc(date, `${end}:00`, tz)];
 }
 
-function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC", now = new Date()) {
+function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC", notBefore = null) {
   const [start, end] = prefBounds(date, timePref, tz);
   const sorted = [...busy]
     .map((b) => ({ start: new Date(b.start ?? b.start_at), end: new Date(b.end ?? b.end_at) }))
     .sort((a, b) => a.start - b.start);
   const need = durationMinutes * 60000;
   const slots = [];
-  let cursor = start;
-  const soonest = new Date(now.getTime() + 15 * 60000);
-  if (cursor < soonest) {
-    cursor = new Date(Math.ceil(soonest.getTime() / (30 * 60000)) * 30 * 60000);
-  }
+  let cursor = notBefore && notBefore > start ? notBefore : start;
   for (const b of sorted) {
     while (cursor.getTime() + need <= Math.min(b.start.getTime(), end.getTime()) && slots.length < count) {
       slots.push({ start: new Date(cursor), end: new Date(cursor.getTime() + need) });
@@ -117,6 +116,18 @@ function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC", now
 }
 
 /**
+ * Slots on or before "today" must start after now plus a short confirm
+ * buffer - Ambiguous rejects creates in the past and a slot chosen a few
+ * minutes later would land there. Past dates yield no slots so callers
+ * fall forward to the next day.
+ */
+function proposeFromBusy(busy, { date, durationMinutes = 60, count = 3, timePref = null, tz, now }) {
+  const notBefore =
+    date <= dateStr(partsInTz(tz, now())) ? new Date(now().getTime() + 15 * 60000) : null;
+  return findSlots(busy, date, durationMinutes, count, timePref, tz, notBefore);
+}
+
+/**
  * Calendar adapter behind the agent loop. When Ambiguous is enabled the
  * adapter is an in-memory mirror over stubCalendar: every loop call (listDay,
  * proposeSlots, create, reschedule, cancel) reads and writes memory, so
@@ -126,10 +137,10 @@ function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC", now
  * Local event ids stay stable for callers; remoteIds translates at push time.
  * With no key, or CALENDAR=memory, the bare stub runs with zero API calls.
  */
-function createCalendar({ ambi, env = process.env } = {}) {
+function createCalendar({ ambi, env = process.env, now = () => new Date() } = {}) {
   const client = ambi;
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
-  if (!client?.enabled || env.CALENDAR === "memory") return stubCalendar(tz);
+  if (!client?.enabled || env.CALENDAR === "memory") return stubCalendar(tz, now);
 
   let idsP;
   function ids() {
@@ -199,6 +210,7 @@ function createCalendar({ ambi, env = process.env } = {}) {
               start_at: ev.start,
               end_at: ev.end,
               description: ev.description,
+              ...(ev.location ? { location: ev.location } : {}),
             });
             remoteIds.set(id, remote.id);
             ev.remoteId = remote.id;
@@ -296,7 +308,7 @@ function createCalendar({ ambi, env = process.env } = {}) {
  * Used as the offline fallback in createCalendar and by all bus tests.
  * apply() runs a batch of creates/updates/deletes in one call.
  */
-function stubCalendar(tz = "UTC") {
+function stubCalendar(tz = "UTC", now = () => new Date()) {
   const events = [];
   function overlapsDay(e, date) {
     const [a, b] = dayBounds(date, tz);
@@ -310,9 +322,9 @@ function stubCalendar(tz = "UTC") {
     },
     async proposeSlots({ date, durationMinutes = 60, count = 3, timePref = null }) {
       const busy = events.filter((e) => e.status !== "canceled" && overlapsDay(e, date));
-      return findSlots(busy, date, durationMinutes, count, timePref, tz);
+      return proposeFromBusy(busy, { date, durationMinutes, count, timePref, tz, now });
     },
-    async createEvent({ title, start, end, description }) {
+    async createEvent({ title, start, end, description, location }) {
       const ev = {
         id: `stub-${randomUUID()}`,
         title,
@@ -320,6 +332,7 @@ function stubCalendar(tz = "UTC") {
         end: new Date(end).toISOString(),
         description,
         status: "confirmed",
+        ...(location ? { location } : {}),
       };
       const clash = events.find(
         (o) => o.status !== "canceled" && ev.start < o.end && ev.end > o.start
