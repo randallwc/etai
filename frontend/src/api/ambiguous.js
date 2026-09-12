@@ -1,5 +1,7 @@
 import { parseRequest } from "../lib/parseRequest.js";
 import { firstFreeSlot, formatSlot } from "../lib/schedule.js";
+import { runChecks, summarizeChecks } from "../lib/checks.js";
+import { geocode, driveMinutes, precipAt } from "./lookup.js";
 
 const BASE = "https://app.ambiguous.ai/api";
 const KEY = import.meta.env.VITE_AMBIGUOUS_API_KEY;
@@ -119,27 +121,72 @@ async function scheduleMeeting(req) {
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart);
   dayEnd.setHours(23, 59, 59, 999);
-  const busy = attendee
-    ? await busySlots(attendee.id, dayStart, dayEnd).catch(() => [])
-    : [];
-  const slot = firstFreeSlot(busy, req.dayOffset, req.hour);
+  const [calendar, eventsRes, attendeeBusy] = await Promise.all([
+    defaultCalendar(),
+    api(
+      `/calendars/events?start=${dayStart.toISOString()}&end=${dayEnd.toISOString()}`
+    ).catch(() => null),
+    attendee ? busySlots(attendee.id, dayStart, dayEnd).catch(() => []) : [],
+  ]);
+  const dayEvents = eventsRes?.data ?? [];
+  const slot = firstFreeSlot(
+    [...dayEvents, ...attendeeBusy],
+    req.dayOffset,
+    req.hour
+  );
   if (!slot) return "They're fully booked that day. Want me to try another day?";
-  const calendar = await defaultCalendar();
+
+  const endOf = (e) => new Date(e.end_at ?? e.end);
+  const prev = dayEvents
+    .filter((e) => {
+      const d = endOf(e);
+      return !isNaN(d) && d <= slot.start;
+    })
+    .sort((a, b) => endOf(b) - endOf(a))[0];
+
+  let travelMinutes = null;
+  let precipProb = null;
+  if (req.location) {
+    const geo = await geocode(req.location).catch(() => null);
+    if (geo) {
+      const [prevGeo, rain] = await Promise.all([
+        prev?.location ? geocode(prev.location).catch(() => null) : null,
+        precipAt(geo.lat, geo.lon, slot.start).catch(() => null),
+      ]);
+      precipProb = rain;
+      if (prevGeo)
+        travelMinutes = await driveMinutes(prevGeo, geo).catch(() => null);
+    }
+  }
+  const checks = runChecks({
+    slot,
+    prevEnd: prev ? endOf(prev) : null,
+    travelMinutes,
+    precipProb,
+  });
+
   const who = attendee?.display_name ?? req.withName;
+  const title = who
+    ? `Meeting with ${who}`
+    : req.location
+      ? `Job at ${req.location}`
+      : "Appointment";
   await api(`/calendars/${calendar.id}/events`, {
     method: "POST",
     body: JSON.stringify({
-      title: who ? `Meeting with ${who}` : "Meeting",
+      title,
       start_at: slot.start.toISOString(),
       end_at: slot.end.toISOString(),
+      location: req.location,
       attendees: attendee ? [{ user_id: attendee.id }] : [],
     }),
   });
   const caveat =
     req.withName && !attendee
-      ? ` — heads up, ${req.withName} isn't in the workspace yet, so no invite went out`
+      ? ` Heads up, ${req.withName} isn't in the workspace yet, so no invite went out.`
       : "";
-  return `Done — meeting is scheduled${who ? ` with ${who}` : ""} for ${formatSlot(slot)}, based on availability${caveat}. Is that all?`;
+  const summary = summarizeChecks(checks);
+  return `Done — booked for ${formatSlot(slot)}${who ? ` with ${who}` : ""}. ${summary ? summary + " " : ""}${caveat}Is that all?`;
 }
 
 /**
