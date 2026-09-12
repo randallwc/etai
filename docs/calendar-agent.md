@@ -6,14 +6,17 @@ https://app.ambiguous.ai/mcp (Streamable HTTP transport, protocol version
 Other project assets can require main.js and call createEventFromText(text).
 The input is deliberately structured plain text:
 
-    Team sync | 2026-09-14T10:00:00-07:00 | 60m | review estimates
+    Sprinkler repair | 2026-09-14T10:00:00-07:00 | 60m | Rosa Alvarez | +15551234567 | 412 Willow St | Replace leaking valve
 
-The title, offset-bearing ISO start time, and duration are required; the
-description is optional. It returns a result with status created, conflict,
-or invalid rather than creating an event on malformed input or when the time
-overlaps an existing non-cancelled event. It reads the surrounding calendar
-window before creating and uses the default calendar (or the first available
-calendar). The event object returned by Ambiguous is included on success.
+The title, offset-bearing ISO start time, duration, client name, client
+contact, location, and request are all required. Location is written to the
+event's native location field. Client information and the request are written
+to a labeled event description. It returns a result with status created,
+conflict, or invalid rather than creating an event on malformed input or when
+the time overlaps an existing non-cancelled event. It reads the surrounding
+calendar window before creating and uses the default calendar (or the first
+available calendar). The event object returned by Ambiguous is included on
+success.
 
 Text is not sent to an LLM. Relative dates, vague times, attendee resolution,
 and automatic rescheduling are intentionally rejected until a caller turns
