@@ -62,7 +62,7 @@ test("helpers: resolveDayRef, parseChoice, extractJson", () => {
   assert.match(resolveDayRef("today", "UTC", now), /^2026-09-12$/);
   assert.equal(resolveDayRef("tomorrow", "UTC", now), "2026-09-13");
   assert.match(resolveDayRef("monday", "UTC", now), /^2026-09-14$/);
-  const slots = [{ start: "2026-09-14T09:00:00" }, { start: "2026-09-14T10:30:00" }];
+  const slots = [{ start: "2026-09-14T09:00:00Z" }, { start: "2026-09-14T10:30:00Z" }];
   assert.equal(parseChoice("1", slots, "UTC"), 1);
   assert.equal(parseChoice("second", slots, "UTC"), 2);
   assert.equal(parseChoice("9am works", slots, "UTC"), 1);
