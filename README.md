@@ -22,6 +22,10 @@ workspace is the calendar of record. A FaceTime-style web app
 
 [click here for slides](https://htmlpreview.github.io/?https://github.com/randallwc/etai/blob/main/demo/index.html)
 
+<img src="docs/screenshots/sms-booking.jpeg" alt="Booking a job over SMS" width="320">
+<img src="docs/screenshots/dispatch-board.png" alt="Dispatch board with job detail and ETA" width="640">
+<img src="docs/screenshots/call-screen.png" alt="Call-your-agent screen" width="640">
+
 ## layout
 
 - `messaging/`: messaging service (iMessage/SMS in and out)
