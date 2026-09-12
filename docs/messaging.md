@@ -55,10 +55,18 @@ CONFIG
   UPSTREAM_URL          optional default inbound subscriber
   BLUEBUBBLES_URL       Cloudflare tunnel URL of the BlueBubbles server
   BLUEBUBBLES_PASSWORD  its API password
+  AMBIG_API             Ambiguous workspace key (or AMBIGUOUS_API_KEY)
+  AMBIGUOUS_BASE_URL    defaults to https://app.ambiguous.ai
+  CARRIER_GATEWAY       defaults to vtext.com
 
-With both BlueBubbles vars set, sends go out over real iMessage. Without
-them the sim transport logs outbound texts to stdout and returns sim-* ids,
-which keeps every dependent agent fully testable.
+Transport selection: bluebubbles (both vars) -> ambimail (AMBIG_API) ->
+sim. ambimail delivers outbound texts by sending Ambiguous workspace mail
+to <number>@vtext.com -- real SMS delivery, no Mac required, but only for
+Verizon numbers and only until Verizon retires the gateway (~March 2027).
+Inbound replies do NOT come back through ambimail -- pair it with a real
+transport or expect one-way texts. With neither configured the sim
+transport logs outbound texts to stdout and returns sim-* ids, which keeps
+every dependent agent fully testable.
 
 TESTING THE iMESSAGE PATH
 -------------------------

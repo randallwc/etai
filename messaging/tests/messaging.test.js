@@ -39,6 +39,16 @@ after(() => {
   upstream.close();
 });
 
+test("transport selection prefers bluebubbles, then ambimail, then sim", () => {
+  const { createTransport } = require("../transports.js");
+  assert.equal(
+    createTransport({ BLUEBUBBLES_URL: "https://x", BLUEBUBBLES_PASSWORD: "p" }).name,
+    "bluebubbles"
+  );
+  assert.equal(createTransport({ AMBIG_API: "ak_x" }).name, "ambimail");
+  assert.equal(createTransport({}).name, "sim");
+});
+
 test("send returns an externalId and rejects a bad phone", async () => {
   const ok = await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
   assert.equal(ok.status, 200);
