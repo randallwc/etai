@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etai/models/calendar-event-request",
+  "title": "Calendar Event Text Request",
+  "description": "Text-only scheduling input accepted by calendar-agent. The text is pipe-delimited: title | ISO 8601 start with offset | duration in minutes | optional description.",
+  "$defs": {
+    "eventText": {
+      "type": "string",
+      "pattern": "^\\s*[^|]+\\|\\s*\\d{4}-\\d{2}-\\d{2}T[^|]+\\|\\s*\\d+\\s*(?:m|min|mins|minutes)?(?:\\|.*)?$"
+    },
+    "createResult": {
+      "type": "object",
+      "required": ["status", "request"],
+      "properties": {
+        "status": { "enum": ["created", "conflict", "invalid"] },
+        "request": {
+          "type": "object",
+          "required": ["title", "start_at", "end_at"],
+          "properties": {
+            "title": { "type": "string", "minLength": 1 },
+            "start_at": { "type": "string", "format": "date-time" },
+            "end_at": { "type": "string", "format": "date-time" },
+            "description": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "conflicts": { "type": "array", "items": { "type": "object" } },
+        "event": { "type": "object" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
