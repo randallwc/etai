@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etai/models/copilot-agent",
+  "title": "Copilot Agent Contract",
+  "description": "The tool surface and run result of the CopilotKit agent that answers sms and imessage channels in bus/copilot.js. Tools are backend tools executed inside the bus process during an agent run; the run result carries the assistant text that gets texted back to the sender (or spoken for voice). Tool args and results match the calendar/store boundary in bus/calendar.js and bus/state.js.",
+  "$defs": {
+    "toolName": {
+      "enum": ["get_schedule", "get_availability", "book_job", "reschedule_job", "cancel_job", "report_delay", "send_text", "create_task"],
+      "description": "the only functions the agent may invoke"
+    },
+    "dateRef": {
+      "type": "string",
+      "description": "YYYY-MM-DD, or a relative ref (today, tomorrow, weekday name) resolved in the contractor timezone"
+    },
+    "getScheduleArgs": {
+      "type": "object",
+      "required": ["date"],
+      "properties": { "date": { "$ref": "#/$defs/dateRef" } },
+      "additionalProperties": false
+    },
+    "getAvailabilityArgs": {
+      "type": "object",
+      "required": ["date"],
+      "properties": {
+        "date": { "$ref": "#/$defs/dateRef" },
+        "durationMinutes": { "type": "integer", "exclusiveMinimum": 0 },
+        "timePref": { "type": "string", "description": "morning | afternoon | evening | HH:MM" }
+      },
+      "additionalProperties": false
+    },
+    "bookJobArgs": {
+      "type": "object",
+      "required": ["start", "end", "description"],
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "rescheduleJobArgs": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "jobRef": { "type": "string", "description": "job id, description fragment, or time like 2pm; omitted means the texter's next job" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "cancelJobArgs": {
+      "type": "object",
+      "properties": {
+        "jobRef": { "type": "string", "description": "same resolution rules as rescheduleJobArgs.jobRef" }
+      },
+      "additionalProperties": false
+    },
+    "reportDelayArgs": {
+      "type": "object",
+      "required": ["minutes"],
+      "properties": {
+        "minutes": { "type": "integer", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "sendTextArgs": {
+      "type": "object",
+      "required": ["to", "body"],
+      "properties": {
+        "to": { "type": "string", "description": "E.164 phone number, or the literal 'contractor'" },
+        "body": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "createTaskArgs": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "runResult": {
+      "type": "object",
+      "required": ["reply"],
+      "properties": {
+        "reply": { "type": "string", "description": "final assistant text; sent to the texter for sms/imessage, returned inline for voice" },
+        "runId": { "type": "string" },
+        "threadId": { "type": "string", "description": "equals the inbound threadKey" },
+        "toolCalls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tool"],
+            "properties": {
+              "tool": { "$ref": "#/$defs/toolName" },
+              "args": { "type": "object" },
+              "error": { "type": "string" }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
