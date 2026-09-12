@@ -96,6 +96,24 @@ body {
   box-shadow: 0 0 80px color-mix(in srgb, var(--agent-color) 30%, transparent);
 }
 
+.rive-stage {
+  position: relative;
+  width: min(300px, 62vw);
+  aspect-ratio: 1;
+}
+
+.rive-stage .orb-core {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+.rive-stage canvas {
+  filter: drop-shadow(
+    0 18px 44px color-mix(in srgb, var(--agent-color) 40%, transparent)
+  );
+}
+
 .agent-surface.speaking .orb-core {
   animation: talk 0.6s ease-in-out infinite;
 }

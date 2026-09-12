@@ -213,17 +213,18 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
 
       <div className="ft-top">
         <div className="agent-switcher">
-          {agents.map((a) => (
-            <button
-              key={a.id}
-              className={`switch-dot ${a.id === agent.id ? "on" : ""}`}
-              style={{ background: a.theme }}
-              title={a.name}
-              onClick={() => onSwitch(a)}
-            >
-              {a.initials}
-            </button>
-          ))}
+          {agents.length > 1 &&
+            agents.map((a) => (
+              <button
+                key={a.id}
+                className={`switch-dot ${a.id === agent.id ? "on" : ""}`}
+                style={{ background: a.theme }}
+                title={a.name}
+                onClick={() => onSwitch(a)}
+              >
+                {a.initials}
+              </button>
+            ))}
         </div>
         <div className="ft-top-right">
           <div className="ft-status">
