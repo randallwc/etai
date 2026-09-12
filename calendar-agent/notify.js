@@ -67,7 +67,6 @@ function createNotifier(env = process.env) {
       () => pollOnce().catch((e) => console.error(`[notify] poll failed: ${e.message}`)),
       ms,
     );
-    timer.unref?.();
     return { stop: () => clearInterval(timer) };
   }
 
