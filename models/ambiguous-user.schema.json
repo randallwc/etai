@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AmbiguousUser",
+  "description": "Item in the `data` array of GET /api/users. Verified against the live API 2026-09-12.",
+  "type": "object",
+  "required": ["id", "type", "display_name"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "type": { "type": "string", "enum": ["agent", "human"] },
+    "username": { "type": "string" },
+    "display_name": { "type": "string" },
+    "workspace_email": { "type": "string" },
+    "primary_email": { "type": ["string", "null"] },
+    "avatar_url": { "type": ["string", "null"] }
+  }
+}
