@@ -50,9 +50,10 @@ function parseChoice(body, slots, tz) {
   return null;
 }
 
-function optionsText(slots, dateLabel) {
+function optionsText(slots, dateLabel, description) {
   const list = slots.map((s, i) => `${i + 1}) ${s.label}`).join("  ");
-  return `I have these open ${dateLabel}: ${list}. Reply with a number.`;
+  const what = description ? `${description} — ` : "";
+  return `${what}I have these open ${dateLabel}: ${list}. Reply with a number.`;
 }
 
 /**
@@ -137,17 +138,21 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     if (!slots.length) {
       return say("Those days are fully booked. Want me to look further out?");
     }
+    const description =
+      intent.description ??
+      (jobId ? store.data.jobs[jobId]?.description : null) ??
+      msg.body;
     store.setThread(msg.threadKey, {
       pendingProposal: {
         mode,
         jobId: jobId ?? null,
         slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString() })),
-        description: intent.description ?? msg.body,
+        description,
         customerPhone: msg.from,
         createdAt: now().toISOString(),
       },
     });
-    await say(optionsText(labeledSlots(slots), fmtDay(slots[0].start, tz)));
+    await say(optionsText(labeledSlots(slots), fmtDay(slots[0].start, tz), description));
   }
 
   async function proposalReply(msg, thread, say) {
@@ -158,6 +163,13 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     }
     const n = parseChoice(msg.body, p.slots, tz);
     if (!n || n > p.slots.length) {
+      const retry = await ai.classify(msg.body);
+      if (
+        (retry.intent === "book" || retry.intent === "reschedule") &&
+        (retry.dayRef || retry.timePref)
+      ) {
+        return propose(msg, retry, p.mode, p.jobId, say);
+      }
       const list = p.slots.map((s, i) => `${i + 1}) ${fmtTime(s.start, tz)}`).join("  ");
       return say(`Sorry, which one — ${list}? Reply with a number.`);
     }
