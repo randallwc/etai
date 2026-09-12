@@ -63,12 +63,10 @@ function missingBook(b) {
   const m = [];
   if (b.mode === "book" && !b.description) m.push("what");
   if (!b.dayRef && !b.timePref) m.push("when");
-  if (b.mode === "book" && !b.location) m.push("where");
   return m;
 }
 
 function askFor(b) {
-  if (b.mode === "reschedule") return "When should I move it to?";
   const q = [];
   if (!b.description) q.push("what's the job");
   if (!b.dayRef && !b.timePref) q.push("what day or time works");
@@ -107,6 +105,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       return result;
     } catch (e) {
       store.logAction({ tool, args, error: e.message });
+      if (args.jobId) e.jobId = args.jobId;
       throw e;
     }
   }
@@ -121,6 +120,12 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       () => upsertContact({ name: c.name ?? null, phone })
     ).catch(() => null);
     if (contact?.id) store.upsertCustomer(phone, { ambiguousCrmId: contact.id });
+  }
+
+  async function learnName(phone, name) {
+    if (!name || isContractor(phone)) return;
+    store.upsertCustomer(phone, { name });
+    await crmSync(phone);
   }
 
   function labeledSlots(slots) {
@@ -191,6 +196,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     let n = parseChoice(msg.body, p.slots, tz);
     if (!n || n > p.slots.length) {
       const retry = await ai.classify(msg.body, { channel: msg.channel });
+      await learnName(msg.from, retry.name);
       if (retry.slotChoice && retry.slotChoice <= p.slots.length) {
         n = retry.slotChoice;
       } else if (
@@ -377,6 +383,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     }
     const intent = await ai.classify(msg.body);
     const fields = extractFields(msg.body);
+    await learnName(msg.from, intent.name ?? fields.name);
     for (const k of ["description", "dayRef", "timePref", "durationMinutes", "location"]) {
       if (!b[k]) b[k] = intent[k] ?? fields[k] ?? null;
     }
@@ -436,6 +443,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           history: thread.history ?? [],
         });
         store.setThread(msg.threadKey, { lastIntent: intent.intent });
+        await learnName(msg.from, intent.name ?? extractFields(msg.body).name);
         switch (intent.intent) {
           case "book": {
             store.upsertCustomer(msg.from, intent.name ? { name: intent.name } : {});
@@ -467,15 +475,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
             const { job, ambiguous } = jobForIntent(msg, intent);
             if (ambiguous) await say("Which visit should I move - reply with the job name or its day.");
             else if (!job?.ambiguousEventId) await say("I don't see a booking to move - want me to set one up?");
-            else {
-              const book = gatherBook(msg, intent, "reschedule", job.id);
-              if (missingBook(book).length) {
-                store.setThread(msg.threadKey, { pendingBook: book });
-                await say(askFor(book));
-              } else {
-                await propose(msg, book, "reschedule", job.id, say);
-              }
-            }
+            else await propose(msg, intent, "reschedule", job.id, say);
             break;
           }
           case "day_summary":
@@ -527,7 +527,25 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       }
     } catch (e) {
       console.error(`agent loop failed for ${msg.externalId}: ${e.message}`);
-      await say("Sorry, I couldn't reach the calendar just now. Try again in a minute.");
+      const boss = isContractor(msg.from);
+      if (e?.code === "not_found") {
+        const job = e.jobId
+          ? store.data.jobs[e.jobId]
+          : boss ? store.nextJob(now().getTime()) : store.jobForPhone(msg.from);
+        if (job?.ambiguousEventId) {
+          job.ambiguousEventId = null;
+          store.save();
+        }
+        await say(boss
+          ? `That booking isn't on the calendar anymore - cleared the link on my end. (${e.message})`
+          : "That booking isn't on the calendar anymore - I cleared it on my end. Reply to set a new time.");
+      } else if (e?.code === "auth") {
+        await say(boss
+          ? `My calendar connection needs a new key - ${e.message}.`
+          : "My calendar connection needs a new key - tell the contractor.");
+      } else {
+        await say("Sorry - I couldn't reach the calendar just now. Try again in a minute.");
+      }
     }
     return out.reply;
   }
