@@ -163,7 +163,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     }
     let n = parseChoice(msg.body, p.slots, tz);
     if (!n || n > p.slots.length) {
-      const retry = await ai.classify(msg.body);
+      const retry = await ai.classify(msg.body, { channel: msg.channel });
       if (retry.slotChoice && retry.slotChoice <= p.slots.length) {
         n = retry.slotChoice;
       } else if (
@@ -355,6 +355,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       else {
         if (thread.pendingClarify) store.setThread(msg.threadKey, { pendingClarify: null });
         const intent = await ai.classify(msg.body, {
+          channel: msg.channel,
           role: isContractor(msg.from) ? "contractor" : "client",
           customer: store.data.customers[msg.from] ?? null,
           jobs: isContractor(msg.from) ? store.upcomingJobs(now().getTime()) : store.jobsForPhone(msg.from),

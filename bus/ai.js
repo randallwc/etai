@@ -1,4 +1,5 @@
 const { partsInTz } = require("./calendar.js");
+const { channelPrompt } = require("./prompts.js");
 
 const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "clarify", "other"];
 
@@ -34,7 +35,8 @@ function contextLines(ctx) {
 
 function prompt(text, todayLabel, ctx) {
   return [
-    "You are the intent extractor for a contractor's scheduling assistant that works over SMS.",
+    "You are the intent extractor for a contractor's scheduling assistant.",
+    channelPrompt(ctx?.channel),
     "Return ONLY raw JSON matching this shape, no markdown, no prose:",
     '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|clarify|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","jobRef":"","question":"","say":"","slotChoice":0}',
     "Use null for any field that is absent. Rules:",
@@ -106,6 +108,7 @@ function createAi({ chat, env = process.env, now = () => new Date() }) {
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
   const classifyTimeoutMs = Number(env.AI_CLASSIFY_TIMEOUT_MS) || 15000;
   async function classify(text, ctx) {
+    if (typeof ctx === "string") ctx = { channel: ctx };
     const fast = fallbackClassify(text);
     if (FAST_INTENTS.has(fast.intent)) return fast;
     try {

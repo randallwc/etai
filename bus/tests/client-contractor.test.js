@@ -363,3 +363,20 @@ test("ai classify parses wrapped JSON and falls back to other on failure", async
   const garbled = createAi({ chat: async () => ({ response: "no json here" }), env: {} });
   assert.equal((await garbled.classify("cancel")).intent, "cancel");
 });
+
+test("classify renders the channel system prompt", async () => {
+  const prompts = [];
+  const ai = createAi({
+    chat: async (p) => {
+      prompts.push(p);
+      return { response: '{"intent":"other"}' };
+    },
+    env: {},
+  });
+  await ai.classify("hi", "voice");
+  await ai.classify("hi", "imessage");
+  await ai.classify("hi", "carrier-pigeon");
+  assert.match(prompts[0], /transcribed speech/);
+  assert.match(prompts[1], /iMessage text/);
+  assert.match(prompts[2], /SMS text/);
+});
