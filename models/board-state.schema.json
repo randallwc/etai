@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BoardState",
+  "description": "The read shape returned by the bus's GET /state: the store's jobs, customers, and agent action log as arrays. Lets the dispatch console render real bookings instead of seed data. Field names inline the shapes from job.schema.json, customer.schema.json, and agent-action.schema.json.",
+  "type": "object",
+  "required": ["jobs", "customers", "actions"],
+  "properties": {
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "customerId", "contractorId", "status", "window", "description", "source"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "customerId": { "type": "string", "minLength": 1 },
+          "contractorId": { "type": "string", "minLength": 1 },
+          "ambiguousEventId": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["requested", "confirmed", "en_route", "done", "canceled"] },
+          "window": {
+            "type": "object",
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            },
+            "additionalProperties": false
+          },
+          "address": { "type": "string" },
+          "description": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "enum": ["message", "call"] },
+          "eta": { "type": ["string", "null"], "format": "date-time" },
+          "remindedAt": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "customers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "phone"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": ["string", "null"] },
+          "phone": { "type": "string", "pattern": "^\\+[1-9]\\d{6,14}$" },
+          "address": { "type": ["string", "null"] },
+          "ambiguousCrmId": { "type": ["string", "null"] },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "tool", "args", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "tool": { "type": "string", "minLength": 1 },
+          "args": { "type": "object" },
+          "result": {},
+          "error": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
