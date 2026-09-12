@@ -46,6 +46,7 @@ function ambimail(env) {
         body: JSON.stringify({
           to: [`${digits}@${gateway}`],
           subject: "ETAi",
+          body_markdown: body,
           body_text: body,
         }),
       });
