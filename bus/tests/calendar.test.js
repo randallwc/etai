@@ -1,8 +1,14 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { stubCalendar } = require("../calendar.js");
+const { stubCalendar, createCalendar } = require("../calendar.js");
 
 const TZ = "America/Los_Angeles";
+
+test("createCalendar returns the in-memory stub with no key or CALENDAR=memory", () => {
+  assert.equal(createCalendar({ ambi: { enabled: false }, env: {} }).stub, true);
+  assert.equal(createCalendar({ ambi: { enabled: true }, env: { CALENDAR: "memory" } }).stub, true);
+  assert.equal(createCalendar({ ambi: { enabled: true }, env: {} }).stub, false);
+});
 
 test("apply runs creates, updates, and deletes in one call", async () => {
   const cal = stubCalendar(TZ);

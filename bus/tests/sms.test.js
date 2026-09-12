@@ -139,7 +139,7 @@ test("gateway mail in produces a reply back out to the gateway", async () => {
   assert.equal(res.status, 202);
   await waitFor(() => mailOut.length === 1);
   assert.deepEqual(mailOut[0].to, [CLIENT_GATEWAY]);
-  assert.equal(mailOut[0].body_markdown, "Nothing on the calendar today.");
+  assert.equal(mailOut[0].body_markdown, "Nothing booked for you right now — want me to set something up?");
 });
 
 test("a booking is proposed and confirmed entirely over sms", async () => {
@@ -207,5 +207,5 @@ test("sim transport runs the whole loop with no providers", async () => {
     console.log = orig;
   }
   const out = lines.find((l) => l.includes(`[sim] -> ${CLIENT}`));
-  assert.match(out, /Nothing on the calendar today\./);
+  assert.match(out, /Nothing booked for you right now/);
 });
