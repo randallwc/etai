@@ -117,7 +117,7 @@ test("keyword intents answer without an assistant call", async () => {
   const sendsBefore = phoneSends.length;
   await post(`${msgBase}/simulate/inbound`, { from: CONTRACTOR, body: "what's my day" });
   await waitFor(() => phoneSends.length === sendsBefore + 1);
-  assert.equal(phoneSends.at(-1).body.message, "Nothing on the calendar today.");
+  assert.equal(phoneSends.at(-1).body.message, "etAI update: Nothing on the calendar today.");
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(
     ambiHits.filter((h) => h.path === "/api/assistant/chat").length,

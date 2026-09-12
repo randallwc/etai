@@ -1,5 +1,14 @@
 const { randomUUID } = require("node:crypto");
 
+function carrierGateways(raw) {
+  try {
+    const map = JSON.parse(raw ?? "{}");
+    return map && typeof map === "object" && !Array.isArray(map) ? map : {};
+  } catch {
+    return {};
+  }
+}
+
 function bluebubbles(env) {
   const base = env.BLUEBUBBLES_URL.replace(/\/$/, "");
   const password = env.BLUEBUBBLES_PASSWORD;
@@ -46,6 +55,9 @@ function ambimail(env) {
         return [key10, domains.split("+").map((d) => d.trim()).filter(Boolean)];
       })
   );
+  for (const [num, domain] of Object.entries(carrierGateways(env.CARRIER_GATEWAYS))) {
+    map[num.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "")] = [domain];
+  }
   const timeout = Number(env.FETCH_TIMEOUT_MS ?? 15000);
   return {
     name: "ambimail",

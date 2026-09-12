@@ -204,12 +204,11 @@ describe("fromAmbiguousMail", () => {
     }
   });
 
-  test("returns null for gateway domains the push path does not list", () => {
+  test("returns null for hosts the gateway list does not include", () => {
     for (const host of [
-      "mms.att.net",
       "pm.sprint.com",
-      "msg.fi.google.com",
-      "mymetropcs.com",
+      "mail.example.com",
+      "gateway.othercarrier.net",
     ]) {
       assert.equal(
         fromAmbiguousMail({
