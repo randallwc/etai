@@ -3,7 +3,7 @@ const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 
 test("calendar script requires an API key", () => {
-  const result = spawnSync(process.execPath, ["calendar-agent/test.js"], {
+  const result = spawnSync(process.execPath, ["calendar-agent/main.js"], {
     cwd: process.cwd(),
     env: { ...process.env, AMBIGUOUS_API_KEY: "" },
     encoding: "utf8"

@@ -151,6 +151,7 @@ test("calendarEvent rejects unknown status and missing id", () => {
 const job = schemas["job.schema.json"];
 const agentAction = schemas["agent-action.schema.json"];
 const customer = schemas["customer.schema.json"];
+const mcp = schemas["mcp-contract.schema.json"];
 
 test("job accepts a valid job and rejects bad status", () => {
   const valid = {
@@ -190,6 +191,34 @@ test("customer accepts a nameless client with just a phone", () => {
     validate({ id: "c1", phone: "+15551234567", name: null }, customer, customer),
     []
   );
+});
+
+test("toolsCallParams and rpcError match the MCP wire shape", () => {
+  assert.deepEqual(
+    validate(
+      { name: "list_events", arguments: { start: "2026-09-12T00:00:00Z" } },
+      mcp.$defs.toolsCallParams,
+      mcp
+    ),
+    []
+  );
+  assert.deepEqual(
+    validate({ code: -32601, message: "Method not found" }, mcp.$defs.rpcError, mcp),
+    []
+  );
+});
+
+test("toolsCallResult requires a content array and tolerates structuredContent", () => {
+  assert.deepEqual(
+    validate(
+      { content: [{ type: "text", text: "{}" }], structuredContent: { data: [] } },
+      mcp.$defs.toolsCallResult,
+      mcp
+    ),
+    []
+  );
+  const errs = validate({ structuredContent: {} }, mcp.$defs.toolsCallResult, mcp);
+  assert.ok(errs.some((e) => e.includes("content")));
 });
 
 test("apiError matches the documented error envelope", () => {
