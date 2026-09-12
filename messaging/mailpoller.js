@@ -65,28 +65,29 @@ function createMailPoller(env, accept) {
       console.error(`mailpoller: ${e.message}`);
       return 0;
     }
-    let emitted = 0;
-    for (const item of data.data ?? []) {
-      if (item.read) continue;
-      const message = fromMail(item, env);
-      if (!message) {
-        if (!skipped.has(item.id)) {
-          skipped.add(item.id);
-          console.log(`mailpoller: skipping ${item.id}, no gateway phone`);
+    const results = await Promise.all(
+      (data.data ?? []).map(async (item) => {
+        if (item.read) return 0;
+        const message = fromMail(item, env);
+        if (!message) {
+          if (!skipped.has(item.id)) {
+            skipped.add(item.id);
+            console.log(`mailpoller: skipping ${item.id}, no gateway phone`);
+          }
+          return 0;
         }
-        continue;
-      }
-      if (item.has_attachments && /^\(no content\)$/i.test(message.body)) {
-        const real = await attachmentBody(item.id);
-        if (!real) continue;
-        message.body = real;
-      }
-      const r = await accept(message);
-      if (!r) continue;
-      if (!r.duplicate) emitted += 1;
-      await markRead(item.id);
-    }
-    return emitted;
+        if (item.has_attachments && /^\(no content\)$/i.test(message.body)) {
+          const real = await attachmentBody(item.id);
+          if (!real) return 0;
+          message.body = real;
+        }
+        const r = await accept(message);
+        if (!r) return 0;
+        await markRead(item.id);
+        return r.duplicate ? 0 : 1;
+      })
+    );
+    return results.reduce((a, b) => a + b, 0);
   }
 
   function start() {
