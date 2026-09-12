@@ -182,6 +182,11 @@
         box-shadow: 0 22px 42px rgba(16, 22, 41, .2);
         object-fit: contain;
       }
+      .contractor-screenshot {
+        width: min(680px, 44vw);
+        max-height: min(68vh, 620px);
+        border-radius: 12px;
+      }
       .calendar-invite { padding: 26px; }
       .calendar-invite.active { display: grid; place-items: center; }
       .calendar-screenshot {
@@ -357,12 +362,7 @@
       <section class="slide" aria-label="Slide 5 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
-          <div class="phone" aria-label="Example electrician delay update">
-            <div class="phone-bar"><span>2:17</span><span>5G ▰▰▰</span></div>
-            <div class="phone-name">ETAi Scheduling</div>
-            <div class="bubble in">Running 45 minutes late.</div>
-            <div class="bubble out">I shifted Jordan's appointment to 2:15 PM and texted the new arrival time.</div>
-          </div>
+          <img class="demo-screenshot contractor-screenshot" src="assets/contractor-dispatch.png" alt="ETAi contractor dispatch workspace with a Running late action" data-owner="ETAi hackathon team" data-reason="Real contractor workspace evidence for slide 5">
           <div>
             <p class="eyebrow">Topic 2: Running late</p>
             <h2>A contractor moves their next event when the current job takes longer.</h2>
