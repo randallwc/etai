@@ -18,6 +18,10 @@ cancel appointments over iMessage, SMS, and calls; an Ambiguous.ai
 workspace is the calendar of record. A FaceTime-style web app
 (`frontend/`) lets users call their agent directly.
 
+## demo
+
+[click here for slides](https://htmlpreview.github.io/?https://github.com/randallwc/etai/blob/main/demo/index.html)
+
 ## layout
 
 - `messaging/`: messaging service (iMessage/SMS in and out)
