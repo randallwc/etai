@@ -17,7 +17,11 @@ LAYOUT AND OWNERSHIP
 
   frontend/          call UI, personas, src/api/ambiguous.js is THE
                      Ambiguous boundary -- never fetch Ambiguous elsewhere
-  calendar-agent/    Ambiguous assistant script (see stale note below)
+  calendar-agent/    Ambiguous assistant/MCP scripts + notify.js, which
+                     polls /api/calendars/upcoming-reminders and POSTs due
+                     reminders to {BUS_URL}/webhooks/calendar. Contract:
+                     models/calendar-notification.schema.json,
+                     docs/notifications.md
   messaging/         messaging service: POST /send out, POST /subscriptions
                      to receive normalized inbound, /webhooks/bluebubbles
                      for real iMessage, /simulate/inbound to test without
@@ -32,7 +36,11 @@ LAYOUT AND OWNERSHIP
   shared/            zero-dep helpers shared by services (env.js loads
                      .env without overriding set vars)
   docs/              all documents live here; unix format, no tables
-  bus/               reserved, empty
+  bus/               central router (the "agent service" in docs/). Today:
+                     /webhooks/inbound forwards prose to Ambiguous
+                     assistant/chat and texts the answer back;
+                     /webhooks/calendar takes calendar notifications and
+                     texts CONTRACT_PHONE via messaging /send
 
 CONVENTIONS
 -----------
@@ -111,7 +119,7 @@ CURRENT GAPS
     {from, body} and returns {reply} to speak; the caller is not
     texted, counterparties are. A Vapi tool-call or frontend JS maps
     straight onto it. docs/agent.md has the contract.
-  - bus/ is empty; user-interface/ is empty (frontend/ is the real UI).
+  - user-interface/ is empty (frontend/ is the real UI).
 
 AGENT ARCHITECTURE
 ----------------
