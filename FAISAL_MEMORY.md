@@ -39,6 +39,13 @@ INCIDENT LOG (do not repeat these)
   - A `.secrets.swp` file appeared in the worktree (someone editing a
     secrets file in vim). .secrets* and *.swp are gitignored now. Never
     commit them; never print their contents.
+  - core.hooksPath=.githooks means .git/hooks is ignored entirely --
+    scripts/pre-commit.sh (frontend vitest) does NOT run on commit, only
+    root `npm test` does. setup.md's install note is stale; corrected.
+  - Files change under me mid-session: a teammate landed an ambimail
+    transport commit and uncommitted shared/env.js + messaging/index.js
+    edits while I worked. Re-read files before editing, stage only my
+    own paths, never `git add -A`.
 
 WHAT I OWN / TOUCHED
 --------------------
@@ -52,6 +59,12 @@ WHAT I OWN / TOUCHED
   - models/{phone,calendar}-contract.schema.json + models/tests/
     schemas.test.js -- the wire contracts as JSON Schema + a ~60-line
     subset validator (no ajv, zero-dep rule).
+  - models/{contractor,customer,job,agent-action,message}.schema.json --
+    the agent-core data model, schema-first before agent/ code lands.
+  - docs/messaging-plan.md -- the messaging-side work plan (agent core
+    build order, transport ladder, decisions).
+  - AGENTS.md refresh: real repo layout, backend commands, messaging +
+    agent-core sub-agent roles, hook caveat in definition of done.
   - package.json test script (glob fix) and .gitignore hardening.
 
 TEAM MAP (inferred)
@@ -82,7 +95,8 @@ NEXT
 ----
 
   - Agent core: consume messaging inbound, intent -> Ambiguous tools ->
-    reply via /send. That is the missing brain; docs/API.md has the tool
-    list and message flows.
+    reply via /send. Full plan and build order: docs/messaging-plan.md.
+    Data-model schemas for it are committed under models/ (contractor,
+    customer, job, agent-action, message).
   - If a Mac appears: BlueBubbles checklist in docs/messaging.md.
   - Vapi for voice stretch: POST /webhooks/voice-toolcall spec in PHONE.md.

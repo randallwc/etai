@@ -1,0 +1,202 @@
+MESSAGING WORK PLAN -- what we are building on the messaging side
+==================================================================
+
+Written 2026-09-12. This is the plan for everything between "a text
+arrives" and "a reply goes out." Read docs/messaging.md for the shipped
+service, docs/PHONE.md for the wire contract, docs/API.md for the tool
+surface this plan implements, and docs/GOAL.md for why.
+
+WHERE WE ARE
+------------
+
+Done and tested:
+
+  - messaging/ service: POST /send, POST /subscriptions,
+    POST /webhooks/bluebubbles, POST /simulate/inbound, GET /messages,
+    GET /healthz. Normalized inbound fans out to subscribers; dedup on
+    externalId; self-echo filtered.
+  - Sim transport makes the whole pipeline exercisable with no Mac.
+    BlueBubbles transport is coded but untested (no Mac on this box).
+  - Ambimail transport (added 2026-09-12): outbound texts via Ambiguous
+    mail.send to the carrier email-to-SMS gateway (vtext.com).
+    Verizon-only, outbound-only, delivery unconfirmed, and the gateway
+    is deprecated (~March 2027). A demo stopgap, not the path.
+    INBOUND still has no real transport without BlueBubbles.
+  - Wire contracts: models/phone-contract.schema.json +
+    calendar-contract.schema.json, exercised by models/tests.
+  - Data-model schemas for the agent core now committed under models/
+    (contractor, customer, job, agent-action, message) -- schema-first
+    per AGENT.md before any agent code lands.
+
+The gap, verbatim from SHARED_MEMORY: no agent core. Nothing consumes
+inbound, decides intent, calls Ambiguous, and replies. That loop is the
+entire product -- everything below builds it.
+
+THE SHAPE OF THE THING
+----------------------
+
+One new top-level component: agent/. Plain Node, CommonJS, zero
+dependencies -- same conventions as messaging/. It sits behind the
+messaging service and never sees a transport.
+
+    iMessage/SMS --> messaging/ --POST--> agent/ --POST /send--> messaging/
+
+The agent service does not replace the calendar-service contract in
+docs/CALENDAR.md; it calls the Ambiguous workspace REST API directly
+through its own thin client (agent/ambiguous.js -- the backend mirror of
+the frontend's src/api/ambiguous.js boundary rule). Rationale: the
+calendar "team" shipped only a stale assistant-chat script, standing up
+a second HTTP hop buys nothing at hackathon scale, and the verified
+endpoint list in SHARED_MEMORY is short. CALENDAR.md stays authoritative
+for the TimeWindow/CalendarEvent shapes the agent uses internally.
+
+WORK ITEMS, IN ORDER
+--------------------
+
+1. agent/ skeleton and intake.
+
+   POST /webhooks/inbound (the subscription target messaging/ fans out
+   to): validate against phone-contract.inboundMessage, dedup on
+   externalId (fanout is at-least-once -- providers retry and our own
+   dedup is in-memory), return 202, hand off to the loop async. Never
+   block the sender on the LLM or Ambiguous.
+
+   GET /healthz reports messaging and Ambiguous reachability.
+
+   Wiring: set UPSTREAM_URL on the messaging service, or POST
+   /subscriptions {url: "{AGENT_BASE_URL}/webhooks/inbound"} at startup.
+   Subscribe before traffic -- fanout is fire-and-forget, missed
+   deliveries only exist in messaging's GET /messages log.
+
+2. State.
+
+   In-memory maps keyed by threadKey: conversation state, jobs,
+   customers. Persist to one JSON file on mutation so a restart mid-demo
+   does not lose a half-finished booking. No database -- KISS. The
+   shapes are the schemas committed in models/.
+
+   Dedup needs a seen-set like messaging's (cap ~5000). The AgentAction
+   log doubles as the demo's audit trail and retry ledger.
+
+3. The loop: intent -> tools -> reply.
+
+   Deterministic intents first, LLM second. The four demo flows in
+   docs/GOAL.md are few and phrased predictably ("what's my day",
+   "running 20 late", "can you come Thursday", "cancel"). A small intent
+   classifier gets the demo guaranteed-working without an LLM key or
+   latency. An LLM pass (OPENAI_API_KEY/ANTHROPIC_API_KEY -- we hold it,
+   per INTERFACES.md) is the fallback for unclassified messages, calling
+   the same tools. Do not lead with the LLM; a regex that always works
+   beats a model that mostly works in a 4-minute demo.
+
+   Tools per docs/API.md, thin wrappers over agent/ambiguous.js:
+   get_availability, book_job, reschedule_job, cancel_job,
+   get_schedule, find_customer, upsert_customer, notify, report_delay.
+   Every tool call lands in the AgentAction log; tool failure becomes a
+   plain-language "couldn't reach the calendar, try again in a minute"
+   -- the loop never throws at the user.
+
+4. The four flows (the MVP per GOAL.md).
+
+   WHAT'S MY DAY: get_schedule(today) -> one short text. Contractor
+   identified by phone matching CONTRACTOR phone in config.
+
+   BOOKING: inbound from unknown number -> upsert_customer ->
+   get_availability -> propose ONE concrete slot, never a list -> on
+   "yes" book_job -> confirmations to client and contractor. Pending
+   proposals are per-thread state; "yes" resolves against the last
+   proposal.
+
+   RUNNING LATE: "running 20 late" from the contractor ->
+   report_delay(20): shift the current/next event, text the affected
+   client the new ETA, confirm to the contractor.
+
+   CANCEL/RESCHEDULE: either party -> cancel_job or reschedule_job ->
+   counterparty notified; a cancel offers rebooking in the same text.
+
+5. Daily digest.
+
+   POST /internal/digest -> get_schedule(today) -> one formatted text to
+   the contractor. Manual trigger first (curl for the demo); a setInterval
+   morning cron is a one-liner once the trigger works.
+
+6. Inbound transports (messaging/ side, as hardware allows).
+
+   Outbound is covered three ways (sim, ambimail, BlueBubbles); real
+   INBOUND is the gap. LoopMessage: real iMessage without a Mac;
+   sandbox is inbound-initiated with a 24h reply window -- every demo
+   phone must text in once before we can reach it. Twilio SMS: last
+   resort, trial prefixes outbound and verified-numbers-only. Each is a
+   transport in transports.js plus a webhook route in index.js; the
+   normalized contract does not change. Only build the one the venue's
+   hardware actually needs.
+
+7. Voice (stretch).
+
+   POST /webhooks/voice-toolcall answers Vapi tool-calls synchronously
+   (~7.5s window) against the same tools. Spec in docs/PHONE.md. Only
+   after flows 1-5 demo clean.
+
+DECISIONS AND WHY
+-----------------
+
+Agent calls Ambiguous directly. A separate calendar service is the
+INTERFACES.md ideal; at hackathon scale it is a hop with no second
+implementer. If a calendar service ever lands, agent/ambiguous.js is
+the only file that changes.
+
+Deterministic intents before LLM. Demo reliability, zero extra keys,
+and the intents are genuinely few. The LLM stays as the unclassified-
+message fallback, not the primary path.
+
+JSON file state, not a database. One contractor, a handful of jobs,
+four hours. The file exists so restarts do not wipe a pending booking.
+
+Dedup on both sides. messaging/ dedups before fanout; the agent dedups
+again on receipt. In-memory dedup loses to a restart; providers retry.
+
+One slot, not a list. Clients answer "yes" to a concrete time; menus of
+windows read like software, and the product premise is that the client
+never knows.
+
+ENV REGISTRY (agent service)
+----------------------------
+
+  PORT, AGENT_BASE_URL          where it listens / its public URL
+  MESSAGING_URL                 the messaging service (== PHONE_SERVICE_URL)
+  AMBIGUOUS_API_KEY             ak_ key for etai-workspace
+  CONTRACTOR_USER_ID            workspace member id for availability
+  CONTRACTOR_PHONE              E.164; identifies "the boss" texts
+  OPENAI_API_KEY/ANTHROPIC_API_KEY   fallback intent path only
+  STATE_FILE                    JSON persistence path
+
+VERIFYING
+---------
+
+Root `npm test` on every commit (the .githooks hook). New agent tests go
+in agent/tests/*.test.js to match the glob. Contract-critical paths get
+tested: inbound dedup, intent classification of the demo phrases, slot
+proposal, job status transitions, the send-validation boundary.
+
+End to end without hardware: run messaging/ (sim transport), run agent/
+with UPSTREAM_URL-style subscription, POST /simulate/inbound a demo
+phrase, watch the reply arrive via the sim transport's stdout and the
+event land in the Ambiguous web UI.
+
+Frontend is untouched by this workstream; `npm --prefix frontend test`
+still has to pass for anyone editing it.
+
+OPEN QUESTIONS
+--------------
+
+  - Whether Ambiguous assistant/chat can be the brain outright (it is in
+    the live OpenAPI spec per SHARED_MEMORY; the frontend team found it
+    absent earlier and composed primitives instead). Verify live before
+    relying on it -- calendar-agent/test.js is the harness. Even if it
+    works, notify() and thread state stay ours.
+  - Whether the commit hook should also run the frontend suite -- it
+    currently does not (core.hooksPath=.githooks runs only root
+    npm test; scripts/pre-commit.sh was never installed into .git/hooks
+    and would be bypassed anyway).
+  - Who texts first in the demo if we land on LoopMessage (inbound-
+    initiated only) -- script the order accordingly.
