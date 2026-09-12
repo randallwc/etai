@@ -79,11 +79,20 @@ draggable picture-in-picture tile.
 │   │                          sim transports. Contract: docs/PHONE.md,
 │   │                          run notes: docs/messaging.md
 │   └── tests/
+├── Makefile                   delegates to per-component Makefiles
 ├── calendar-agent/            Ambiguous Assistant chat smoke script
-│   └── tests/                 (assistant/chat status disputed — see
-│                              SHARED_MEMORY landmines)
-├── agent/                     (planned) the agent core — see
-│                              docs/messaging-plan.md
+│   └── tests/
+├── agent/                     the agent core — texts and voice turns
+│   │                          in, Ambiguous calls, replies out.
+│   │                          Docs: docs/agent.md
+│   ├── index.js               HTTP + wiring (createAgentServer)
+│   ├── loop.js                intent -> calendar tools -> reply
+│   ├── ai.js                  assistant/chat intent classification
+│   ├── calendar.js            calendar adapter + stub fallback
+│   ├── state.js               threads/jobs/customers/dedup/action log
+│   ├── reminders.js           pre-job heads-up texts
+│   ├── ambiguous.js           THE backend Ambiguous boundary
+│   └── tests/
 ├── shared/                    zero-dep helpers shared across services
 │   └── env.js                 .env loader (no override of set vars)
 ├── bus/                       reserved, empty
@@ -110,9 +119,14 @@ draggable picture-in-picture tile.
 
 ## 4. Commands
 
+Every component has a Makefile; the root one delegates (`make test`,
+`make run-messaging`, `make run-agent`, `make frontend-build`,
+`make frontend-test`, `make -C <dir> test`).
+
 Root tests (backend, node:test): `npm test` from repo root — the glob is
 `'*/tests/*.test.js'`; `node --test <dir>` does not discover tests.
-Messaging service: `node messaging/index.js` (PORT, default 4020)
+Messaging service: `make run-messaging` (PORT, default 4020)
+Agent service: `make run-agent` (PORT, default 4030)
 Calendar smoke script: `npm run test:calendar` (needs AMBIGUOUS_API_KEY)
 Install deps: `cd frontend && npm install`
 Dev server: `cd frontend && npm run dev`
@@ -150,10 +164,14 @@ routing mid-call), `sendConversation` (transcript handoff). Components
 never fetch Ambiguous endpoints directly. Every function degrades
 gracefully when no API key is set.
 
-### 5.4 Media Agent (future)
-Owns the agent visual surface and audio I/O. Swaps the orb for real
-generated video and wires mic to STT, TTS to speaker. The seam is
-`AgentSurface` — keep its props (`agent`, `speaking`) stable.
+### 5.4 Media / Voice Agent
+Owns the agent visual surface and audio I/O: the orb (or video later),
+mic to STT, TTS to speaker, and the phone-call layer. For call
+intelligence, do NOT rebuild scheduling logic — POST each caller turn
+to the agent service's `POST /voice/turn` ({from, body} -> {reply} to
+speak); notifications to the other party go out over messaging
+automatically. Contract in docs/agent.md. Keep `AgentSurface`'s props
+(`agent`, `speaking`) stable.
 
 ### 5.5 Messaging / Phone Agent
 Owns `messaging/` — the phone service behind the docs/PHONE.md
@@ -164,12 +182,13 @@ normalized inboundMessage shape; transport detail never crosses the
 boundary.
 
 ### 5.6 Agent Core Agent
-Owns `agent/` (planned — docs/messaging-plan.md). Consumes normalized
-inbound from the messaging service, owns per-thread state and the data
-model (models/*.schema.json), decides intent, calls Ambiguous through
-its own `agent/ambiguous.js` client, replies via POST /send. Never
-touches a transport directly. The Ambiguous boundary rule applies here
-too: one file fetches Ambiguous.
+Owns `agent/` (docs/agent.md). Consumes normalized inbound from the
+messaging service and voice turns via POST /voice/turn, owns per-thread
+state and the data model (models/*.schema.json), classifies intent via
+agent/ai.js, calls Ambiguous through its own `agent/ambiguous.js`
+client, replies via messaging POST /send (or in the voice response
+body). Never touches a transport directly. The Ambiguous boundary rule
+applies here too: one file fetches Ambiguous.
 
 ## 6. Architecture rules
 

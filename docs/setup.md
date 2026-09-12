@@ -28,6 +28,19 @@ module, "api GET|POST <path> [-d json]" is the raw escape hatch,
 Auth resolves from AMBI_API_TOKEN, then ./.ambi/config.json (searched
 upward), then ~/.ambi/config.json.
 
+Make targets
+------------
+
+Each component has a Makefile; the root Makefile delegates.
+
+  make test             all backend tests (same as npm test)
+  make run-messaging    messaging service on :4020
+  make run-agent        agent service on :4030
+  make -C <dir> test    one component's tests (messaging, agent,
+                        calendar-agent, shared, models)
+  make frontend-build   frontend production build
+  make frontend-test    frontend vitest suite
+
 Tests and hooks
 ---------------
 
