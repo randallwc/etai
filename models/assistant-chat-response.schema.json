@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ambiguous Assistant Chat Response",
+  "type": "object",
+  "required": ["response", "toolCalls", "spear", "status"],
+  "properties": {
+    "response": {
+      "type": "string"
+    },
+    "toolCalls": {
+      "type": "array"
+    },
+    "spear": {
+      "type": ["object", "null"]
+    },
+    "status": {
+      "enum": ["success", "error"]
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}
