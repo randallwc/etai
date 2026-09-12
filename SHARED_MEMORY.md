@@ -83,7 +83,7 @@ LANDMINES
 ---------
 
   - assistant/chat RESOLVED: it is live and is the agent's intent
-    classifier (agent/ai.js). Returns {response:"..."} with JSON inside;
+    classifier (bus/ai.js). Returns {response:"..."} with JSON inside;
     tolerant extraction in extractJson. Earlier "absent" reports were
     stale.
   - Fresh workspaces are "provisional": provision-agent 403s until the
@@ -105,12 +105,9 @@ LANDMINES
   - Phone normalization: toE164 adds +1 for 10-digit inputs -- sim and
     mail inbound agree on +1XXXXXXXXXX threadKeys. A message normalized
     without the 1 (+4253...) misses jobForPhone lookups silently.
-  - Exactly ONE consumer of messaging /webhooks/inbound: the agent
-    (agent/index.js self-subscribes PUBLIC_URL + uses MESSAGING_URL).
-    The bus also has a /webhooks/inbound that forwards prose to
-    assistant/chat -- subscribe both and every text gets two replies.
-    Point UPSTREAM_URL at the agent; the bus's live role is
-    /webhooks/calendar for calendar-agent/notify.js.
+  - agent/ merged into bus/ ("one brain"): the loop, ai, state,
+    calendar, and ambiguous client now live in bus/. The agent needs
+    PUBLIC_URL + MESSAGING_URL to self-subscribe to messaging fanout.
   - Frontend -> messaging is cross-origin: messaging answers OPTIONS
     and sets allow-*. If you add a service the UI calls, do the same.
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
@@ -138,7 +135,7 @@ CURRENT GAPS
 
 AGENT ARCHITECTURE
 ----------------
-agent/ is now: index.js (HTTP + wiring), loop.js (intent->tools->reply),
+bus/ is now: index.js (HTTP + wiring), loop.js (intent->tools->reply),
 ai.js (LLM classify via Ambiguous assistant/chat, schema
 models/intent.schema.json), state.js (createStore(file|null); null =
 memory-only for tests), calendar.js (adapter: listDay, proposeSlots,
@@ -153,4 +150,4 @@ exposes that as POST /voice/turn {from, body} -> {reply}. Counterparty
 notifications still go through notify() -> messaging /send.
 
 Make: every component has a Makefile (run/test); root Makefile
-delegates -- `make test` == `npm test`, `make run-agent` etc.
+delegates -- `make test` == `npm test`, `make run-bus` etc.
