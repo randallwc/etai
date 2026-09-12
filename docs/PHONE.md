@@ -3,6 +3,10 @@ PHONE -- service contract
 
 Owner: phone team. Counterparty: the agent service.
 
+This contract is implemented by the messaging/ service -- see
+docs/messaging.md for run/config details. The wire shapes below are
+unchanged.
+
 The boundary is two HTTP endpoints. Inbound: you POST every incoming
 message to us in one normalized shape, whatever the transport. Outbound: we
 POST every send to you in one normalized shape, and you pick the transport.
