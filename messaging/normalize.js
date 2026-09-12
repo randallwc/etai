@@ -107,7 +107,7 @@ function fromSim({ from, body, channel = "imessage" }) {
   };
 }
 
-const GATEWAY_HOSTS = /vtext\.com|vzwpix\.com|txt\.att\.net|tmomail\.net|messaging\.sprintpcs\.com|mms\.cricketwireless\.net|vmobl\.com/i;
+const GATEWAY_HOSTS = /vtext\.com|vzwpix\.com|txt\.att\.net|mms\.att\.net|tmomail\.net|messaging\.sprintpcs\.com|mms\.cricketwireless\.net|msg\.fi\.google\.com|mymetropcs\.com|sms\.myboostmobile\.com|vmobl\.com/i;
 
 function phoneFromEmail(addr) {
   const m = String(addr ?? "").match(/([0-9]{7,15})@/);
