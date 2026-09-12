@@ -4,4 +4,5 @@ coverage/
 .env
 .env.local
 *.local
+.ambi/
 .DS_Store
