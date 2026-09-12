@@ -110,6 +110,87 @@ export async function createTask(title) {
   return task;
 }
 
+const INTAKE_FIELDS = [
+  { id: "gate_code", type: "short_text", label: "Gate or entry code" },
+  {
+    id: "pets",
+    type: "select",
+    label: "Any pets we should know about?",
+    options: ["No pets", "Yes - dog", "Yes - cat", "Yes - other"],
+  },
+  { id: "photos", type: "file_upload", label: "Photos of the problem area" },
+  { id: "notes", type: "long_text", label: "Anything else we should know" },
+];
+
+/**
+ * Fallback packet for bookings made when the bus is down: intake form
+ * (public link), work-order doc, and a Sign draft of the work auth. The
+ * full packet (deal, activity, linked task) is the bus's job - see
+ * bus/packet.js. Never throws.
+ */
+export async function createJobPacket({ title, location, when }) {
+  if (!ambiguousEnabled) return null;
+  const packet = { errors: [] };
+  const step = (name, fn) =>
+    fn().catch((e) => {
+      packet.errors.push({ step: name, error: e.message });
+      return null;
+    });
+  const [form, doc] = await Promise.all([
+    step("form", () =>
+      api("/forms", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Intake - ${title}`,
+          description: "A few details before your upcoming visit.",
+          fields: INTAKE_FIELDS,
+          is_published: true,
+        }),
+      })
+    ),
+    step("work_order", () =>
+      api("/documents", {
+        method: "POST",
+        body: JSON.stringify({
+          type: "doc",
+          title: `Work order - ${title}`,
+          content: `# Work order - ${title}\n\n- When: ${when}\n${location ? `- Where: ${location}\n` : ""}- Job: ${title}\n\n## Work authorization\n\nCustomer authorizes the work described above. Signature on the attached Sign document.`,
+        }),
+      })
+    ),
+  ]);
+  if (form?.slug && form?.workspace_slug) {
+    packet.formId = form.id;
+    packet.formUrl = `https://app.ambiguous.ai/f/${form.workspace_slug}/${form.slug}`;
+  }
+  const docId = doc?.id ?? doc?.document?.id;
+  if (docId) packet.documentId = docId;
+  if (docId) {
+    const sign = await step("sign_draft", () =>
+      api("/sign", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Work authorization - ${title}`,
+          source_type: "doc",
+          source_doc_id: docId,
+        }),
+      })
+    );
+    const signDoc = sign?.document ?? sign;
+    if (signDoc?.id) {
+      packet.signDocumentId = signDoc.id;
+      packet.signStatus = signDoc.status;
+    }
+  }
+  await step("task", () =>
+    api("/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: `Prep for ${title} - review intake, send work auth` }),
+    })
+  );
+  return packet;
+}
+
 async function findUserByName(name) {
   const { data } = await api("/users");
   const needle = name.toLowerCase();
@@ -201,12 +282,20 @@ async function scheduleMeeting(req) {
       attendees: attendee ? [{ user_id: attendee.id }] : [],
     }),
   });
+  const packet = await createJobPacket({
+    title,
+    location: req.location,
+    when: formatSlot(slot),
+  }).catch(() => null);
   const caveat =
     req.withName && !attendee
       ? ` Heads up, ${req.withName} isn't in the workspace yet, so no invite went out.`
       : "";
   const summary = summarizeChecks(checks);
-  return `Done - booked for ${formatSlot(slot)}${who ? ` with ${who}` : ""}. ${summary ? summary + " " : ""}${caveat}Is that all?`;
+  const paperwork = packet?.formUrl
+    ? " I also drafted the intake form and work authorization in the workspace."
+    : "";
+  return `Done - booked for ${formatSlot(slot)}${who ? ` with ${who}` : ""}. ${summary ? summary + " " : ""}${caveat}${paperwork}Is that all?`;
 }
 
 function plainReply(text) {

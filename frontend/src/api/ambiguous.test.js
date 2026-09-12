@@ -633,3 +633,72 @@ describe("sendConversation", () => {
     expect(res.ok).toBe(false);
   });
 });
+
+describe("createJobPacket", () => {
+  const PACKET_ROUTES = {
+    "POST /forms": (path, body) => ({
+      id: "form1",
+      slug: "intake-x",
+      workspace_slug: "etai-workspace",
+      ...JSON.parse(body),
+    }),
+    "POST /documents": (path, body) => ({ id: "doc1", ...JSON.parse(body) }),
+    "POST /sign": () => ({ document: { id: "sign1", status: "draft" } }),
+    "POST /tasks": (path, body) => ({ task: { id: "task1", ...JSON.parse(body) } }),
+  };
+
+  it("creates the intake form, work order, sign draft, and task", async () => {
+    const seen = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, options = {}) => {
+        const path = url
+          .replace("https://app.ambiguous.ai/api", "")
+          .replace(/^\/api/, "");
+        seen.push(`${options.method ?? "GET"} ${path}`);
+        for (const [key, responder] of Object.entries(PACKET_ROUTES)) {
+          const [method, prefix] = key.split(" ");
+          if (options.method === method && path.startsWith(prefix)) {
+            return { ok: true, json: async () => responder(path, options.body) };
+          }
+        }
+        return { ok: false, status: 404, json: async () => ({}) };
+      })
+    );
+    const m = await loadModule("ak_test");
+    const p = await m.createJobPacket({
+      title: "Sink fix - Marta",
+      location: "22 main st",
+      when: "tomorrow 9:00 AM",
+    });
+    expect(p.formUrl).toBe(
+      "https://app.ambiguous.ai/f/etai-workspace/intake-x"
+    );
+    expect(p.documentId).toBe("doc1");
+    expect(p.signDocumentId).toBe("sign1");
+    expect(p.errors).toEqual([]);
+    expect(seen).toContain("POST /sign");
+    expect(seen).toContain("POST /tasks");
+  });
+
+  it("is non-fatal per step and skips sign without a doc", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "POST /forms": () => null,
+        "POST /documents": () => null,
+        "POST /tasks": (path, body) => ({ task: { id: "t" } }),
+      })
+    );
+    const m = await loadModule("ak_test");
+    const p = await m.createJobPacket({ title: "x", when: "y" });
+    expect(p.formUrl).toBeUndefined();
+    expect(p.signDocumentId).toBeUndefined();
+    expect(p.errors.map((e) => e.step).sort()).toEqual(["form", "work_order"]);
+  });
+
+  it("returns null without an API key", async () => {
+    const m = await loadModule("");
+    expect(await m.createJobPacket({ title: "x", when: "y" })).toBeNull();
+  });
+});

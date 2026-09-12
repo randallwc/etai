@@ -27,7 +27,7 @@ function fakeIntent(body) {
   return { intent: "other" };
 }
 
-async function serve(extraEnv = {}) {
+async function serve(extraEnv = {}, extraOverrides = {}) {
   const sent = [];
   const calendar = stubCalendar();
   const { server, store } = createBusServer(
@@ -35,6 +35,7 @@ async function serve(extraEnv = {}) {
     {
       ai: { classify: async (b) => fakeIntent(b) },
       calendar,
+      ...extraOverrides,
       notify: async ({ to, body }) => {
         sent.push({ to, body });
         return { externalId: `n-${sent.length}` };
@@ -384,4 +385,30 @@ test("classify renders the channel system prompt", async () => {
   assert.match(prompts[0], /transcribed speech/);
   assert.match(prompts[1], /iMessage text/);
   assert.match(prompts[2], /SMS text/);
+});
+
+test("an afternoon pick off the 9am grid still books", async () => {
+  const ai = {
+    classify: async (b) =>
+      /fix/.test(b)
+        ? { intent: "book", dayRef: "tomorrow", timePref: "afternoon", description: b }
+        : fakeIntent(b),
+  };
+  const { server, sent, calendar, inbound, until } = await serve({}, { ai });
+  try {
+    await inbound("a1", "fix the faucet tomorrow afternoon");
+    await until(1);
+    assert.match(sent[0].body, /1:00 PM/);
+
+    await inbound("a2", "1");
+    await until(3);
+    assert.match(sent[1].body, /locked in/i);
+    const day = new Date(Date.now() + 86400000);
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    const events = await calendar.listDay({ date });
+    assert.equal(events.length, 1);
+    assert.equal(events[0].start, new Date(`${date}T13:00:00Z`).toISOString());
+  } finally {
+    server.close();
+  }
 });

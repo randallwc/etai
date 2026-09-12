@@ -136,6 +136,50 @@ export default function JobDetail({ job, customer, contractor, onAction }) {
         </div>
       )}
 
+      {job.packet && (
+        <div className="jd-paperwork">
+          <span>Paperwork</span>
+          <div className="jd-paperwork-links">
+            {job.packet.formUrl && (
+              <a href={job.packet.formUrl} target="_blank" rel="noreferrer">
+                Intake form
+              </a>
+            )}
+            {job.packet.documentId && (
+              <a
+                href={`https://app.ambiguous.ai/docs/${job.packet.documentId}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Work order
+              </a>
+            )}
+            {job.packet.signDocumentId && (
+              <a
+                href="https://app.ambiguous.ai/sign"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Work auth (
+                {job.packet.signStatus === "preview_pending"
+                  ? "ready to send"
+                  : (job.packet.signStatus ?? "draft")}
+                )
+              </a>
+            )}
+            {job.packet.dealId && (
+              <a
+                href="https://app.ambiguous.ai/crm/deals"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Deal
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="map-slot">
         <MapView
           customer={dest ? { ...dest, label: job.address } : { label: job.address }}

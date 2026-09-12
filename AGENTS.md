@@ -122,6 +122,8 @@ draggable picture-in-picture tile.
 │   ├── calendar.js            calendar adapter + stub fallback
 │   ├── state.js               threads/jobs/customers/dedup/action log
 │   ├── reminders.js           pre-job heads-up texts
+│   ├── packet.js              booking paperwork: intake form, work
+│   │                          order doc, Sign draft, CRM deal, task
 │   ├── ambiguous.js           THE backend Ambiguous boundary
 │   └── tests/
 ├── shared/                    zero-dep helpers shared across services
