@@ -173,6 +173,15 @@
       .bubble { max-width: 86%; margin: 9px 0; padding: 10px 13px; border-radius: 17px; font-size: clamp(12px, 1.2vw, 17px); line-height: 1.32; }
       .bubble.in { background: #e7e8ed; border-bottom-left-radius: 5px; }
       .bubble.out { margin-left: auto; color: white; background: #2671ff; border-bottom-right-radius: 5px; }
+      .demo-screenshot {
+        display: block;
+        width: min(360px, 30vw);
+        max-height: min(72vh, 550px);
+        margin: 0 auto;
+        border-radius: 20px;
+        box-shadow: 0 22px 42px rgba(16, 22, 41, .2);
+        object-fit: contain;
+      }
 
       .callout {
         padding: clamp(21px, 3vw, 42px);
@@ -327,16 +336,7 @@
               <div class="timeline-item"><span class="step">3</span><p>The client confirms a slot. ETAi books it and texts both parties.</p></div>
             </div>
           </div>
-          <div class="phone" aria-label="Example text conversation">
-            <div class="phone-bar"><span>9:41</span><span>5G ▰▰▰</span></div>
-            <div class="phone-name">ETAi Scheduling</div>
-            <div class="bubble in">I need a quote for a breaker that keeps tripping. Do you have time tomorrow?</div>
-            <div class="bubble out">I can help schedule a quote. What is the service address?</div>
-            <div class="bubble in">1428 Cedar Ave. Afternoon is best.</div>
-            <div class="bubble out">I have 1:30 PM or 3:00 PM tomorrow. Which works?</div>
-            <div class="bubble in">1:30 works.</div>
-            <div class="bubble out">Confirmed for tomorrow at 1:30 PM. We will text before arrival.</div>
-          </div>
+          <img class="demo-screenshot" src="assets/quote-booking-sms.jpg" alt="SMS exchange where a client books an electrician appointment with ETAi" data-owner="ETAi hackathon team" data-reason="Real booking evidence for slide 3">
         </div>
       </section>
 
