@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Intent",
+  "description": "Output contract of the agent's AI reader (agent/ai.js, backed by Ambiguous assistant/chat). The model is prompted to return this shape as raw JSON; extra fields are tolerated since LLM output is additive.",
+  "type": "object",
+  "required": ["intent"],
+  "properties": {
+    "intent": { "type": "string", "enum": ["book", "day_summary", "running_late", "cancel", "reschedule", "other"] },
+    "dayRef": { "type": ["string", "null"], "description": "today | tomorrow | weekday name | YYYY-MM-DD" },
+    "timePref": { "type": ["string", "null"], "description": "morning | afternoon | evening | HH:MM" },
+    "durationMinutes": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
+    "delayMinutes": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
+    "name": { "type": ["string", "null"], "description": "caller-supplied name, when offered" },
+    "description": { "type": ["string", "null"], "description": "what the job is, e.g. sprinkler repair" },
+    "slotChoice": { "type": ["integer", "null"], "exclusiveMinimum": 0, "description": "1-based index into a pending proposal's options" }
+  }
+}

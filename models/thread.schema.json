@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ThreadState",
+  "description": "Per-conversation agent state, keyed by threadKey (the counterparty phone). Holds the pending scheduling proposal a client is answering and the last classified intent.",
+  "type": "object",
+  "required": ["threadKey", "updatedAt"],
+  "properties": {
+    "threadKey": { "type": "string", "minLength": 1 },
+    "lastIntent": { "type": ["string", "null"] },
+    "pendingProposal": {
+      "type": ["object", "null"],
+      "required": ["mode", "slots", "customerPhone", "createdAt"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["book", "reschedule"] },
+        "jobId": { "type": ["string", "null"], "description": "set when mode is reschedule" },
+        "slots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": { "type": "string" },
+        "customerPhone": { "type": "string", "pattern": "^\\+[1-9]\\d{6,14}$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
