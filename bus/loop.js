@@ -351,6 +351,14 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       else await reply(msg.from, body);
     };
     try {
+      if (thread.pendingProposal) {
+        const slots = thread.pendingProposal.slots;
+        const stale = slots.every((s) => new Date(s.start) <= now());
+        if (stale && !parseChoice(msg.body, slots, tz)) {
+          store.setThread(msg.threadKey, { pendingProposal: null });
+          thread.pendingProposal = null;
+        }
+      }
       if (thread.pendingProposal) await proposalReply(msg, thread, say);
       else {
         if (thread.pendingClarify) store.setThread(msg.threadKey, { pendingClarify: null });

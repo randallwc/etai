@@ -7,7 +7,7 @@ const { createMessagingServer } = require("../../messaging/index.js");
 const CONTRACTOR = "+15551112222";
 const CLIENT = "+15557654321";
 
-let messaging, bus, ambiguous, bluebubbles, msgBase, ambiBase;
+let messaging, bus, ambiguous, bluebubbles, msgBase, ambiBase, busCal;
 const ambiHits = [];
 const phoneSends = [];
 let stallChat = false;
@@ -72,14 +72,15 @@ before(async () => {
   }).server;
   msgBase = await listen(messaging);
 
-  bus = createBusServer({
+  ({ server: bus, calendar: busCal } = createBusServer({
     AMBIGUOUS_BASE_URL: ambiBase,
     AMBIGUOUS_API_KEY: "ak_test",
     MESSAGING_URL: msgBase,
     CONTRACT_PHONE: CONTRACTOR,
     AI_CLASSIFY_TIMEOUT_MS: "200",
-  }).server;
+  }));
   const busBase = await listen(bus);
+  await busCal.sync();
 
   await post(`${msgBase}/subscriptions`, { url: `${busBase}/webhooks/inbound` });
 });

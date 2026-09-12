@@ -5,6 +5,7 @@ const { fromBlueBubbles, fromSim, fromAmbiguousMail, toE164 } = require("./norma
 
 const SEEN_CAP = 5000;
 const RECENT_CAP = 200;
+const RETRY_CAP = 500;
 
 function createMessagingServer(env = process.env) {
   const transport = createTransport(env);
@@ -14,6 +15,16 @@ function createMessagingServer(env = process.env) {
   }
   const seen = new Set();
   const recent = [];
+  const undelivered = [];
+  const retryMs = Number(env.FANOUT_RETRY_MS ?? 5000);
+  const retryMax = Number(env.FANOUT_RETRY_MAX ?? 24);
+
+  function record(message) {
+    if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
+    seen.add(message.externalId);
+    recent.push(message);
+    if (recent.length > RECENT_CAP) recent.shift();
+  }
 
   async function fanout(message) {
     const results = await Promise.all(
@@ -39,6 +50,8 @@ function createMessagingServer(env = process.env) {
     if (!message) return null;
     if (seen.has(message.externalId) || inflight.has(message.externalId))
       return { message, duplicate: true };
+    const queued = undelivered.findIndex((u) => u.message.externalId === message.externalId);
+    if (queued >= 0) undelivered.splice(queued, 1);
     inflight.add(message.externalId);
     let delivered;
     try {
@@ -46,12 +59,27 @@ function createMessagingServer(env = process.env) {
     } finally {
       inflight.delete(message.externalId);
     }
-    if (!delivered) return null;
-    if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
-    seen.add(message.externalId);
-    recent.push(message);
-    if (recent.length > RECENT_CAP) recent.shift();
+    if (!delivered) {
+      undelivered.push({ message, attempts: 0 });
+      if (undelivered.length > RETRY_CAP) undelivered.shift();
+      return null;
+    }
+    record(message);
     return { message, delivered };
+  }
+
+  async function retryUndelivered() {
+    for (let i = undelivered.length - 1; i >= 0; i--) {
+      const u = undelivered[i];
+      const delivered = await fanout(u.message);
+      if (delivered) {
+        undelivered.splice(i, 1);
+        record(u.message);
+      } else if (++u.attempts >= retryMax) {
+        undelivered.splice(i, 1);
+        console.error(`dropping ${u.message.externalId}: undeliverable after ${retryMax} retries`);
+      }
+    }
   }
 
   function readBody(req) {
@@ -88,6 +116,7 @@ function createMessagingServer(env = process.env) {
         ok: true,
         transport: transport.name,
         subscribers: subscribers.size,
+        queued: undelivered.length,
       });
     }
     if (req.method === "GET" && path === "/messages") {
@@ -157,7 +186,11 @@ function createMessagingServer(env = process.env) {
   });
   const mailPoller = createMailPoller(env, accept);
   if (mailPoller) mailPoller.start();
-  return { server, subscribers, recent, mailPoller };
+  const retryTimer = setInterval(() => {
+    retryUndelivered().catch((e) => console.error(`retryUndelivered: ${e.message}`));
+  }, retryMs);
+  retryTimer.unref?.();
+  return { server, subscribers, recent, mailPoller, retryUndelivered };
 }
 
 if (require.main === module) {

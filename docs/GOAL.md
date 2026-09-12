@@ -96,6 +96,89 @@ NO UI. The product surface is the phone. CopilotKit is documented in API.md as
 an optional stretch demo board (live job-status cards driven by agent state),
 but nothing in the MVP depends on it.
 
+RELIABILITY -- ALWAYS LISTENING
+-------------------------------
+
+The product dies the first time a client's text gets no answer, so the system
+is built around concurrent listener loops rather than one-shot request
+handling. Node's event loop runs all of them in parallel; no worker threads
+are needed because every wait is I/O.
+
+Listeners that must never stop:
+
+  - bus subscription: the bus POSTs its /webhooks/inbound URL to the
+    messaging service at boot and re-subscribes every 30 seconds forever.
+    A messaging restart wipes its subscriber set; the resubscribe loop is
+    what heals it.
+  - fanout retry buffer: when an inbound message reaches messaging with no
+    live subscriber, it is queued and re-fanned every FANOUT_RETRY_MS
+    (5s) up to FANOUT_RETRY_MAX (24) times instead of being dropped. This
+    closes the resubscribe gap -- a BlueBubbles text arriving while the bus
+    is down is delivered once the bus comes back, not lost.
+  - mail poller: Ambiguous inbox polling retries unread mail indefinitely;
+    a mail item is only marked read after a subscriber accepts it.
+  - turn serialization: inbound messages are processed through a promise
+    chain so two texts on one thread can never race (book + slot pick can
+    no longer interleave into a double booking).
+  - dedup: externalId is the dedup key at both layers. The same mail seen
+    by webhook and poller, or a webhook redelivery, collapses to one turn.
+
+Known failure modes these cover: messaging restart with in-flight inbound,
+bus restart, Ambiguous slowness (all Ambiguous fetches are bounded at 60s;
+intent classification races a 15s timeout and falls back to keywords),
+and duplicate webhook delivery.
+
+IN-MEMORY CALENDAR
+------------------
+
+The bus keeps a local mirror of the Ambiguous calendar (bus/calendar.js).
+Every loop decision -- proposing slots, listing a day, checking for
+conflicts and duplicate bookings, create, reschedule, cancel -- reads and
+writes memory only, so replies never wait on the network. sync() drains
+queued writes to Ambiguous in one batch, then pulls remote events in
+14-day windows over a rolling 45-day horizon and merges them. Remote
+deletes are tombstoned out of memory. The server syncs at boot and every
+CALENDAR_SYNC_MS (30s), and inbound calendar webhooks trigger a sync.
+Local event ids stay stable for callers; remoteIds translate at push time.
+CALENDAR=memory forces the bare in-memory store with zero API calls, which
+is how the whole stack runs offline.
+
+SUBAGENTS -- WORKSTREAM SPLIT
+-----------------------------
+
+The repo is built by many agents in parallel. Each owns its files
+exclusively; two agents never edit the same file. Full role contracts live
+in AGENTS.md section 5; this is the current roster:
+
+  - Messaging / Phone Agent -- messaging/: transports, normalization,
+    fanout, dedup, the retry buffer, mail polling.
+  - Agent Core Agent -- bus/: the loop, intent handling, thread state,
+    replies.
+  - Calendar Sync Agent -- bus/calendar.js: the in-memory mirror, batch
+    push/pull, conflict and free-slot checks.
+  - NLP / Intent Agent -- bus/ai.js + bus/prompts.js: classify prompt,
+    context lines, keyword fallback, classify timeout.
+  - Notifications Agent -- bus/reminders.js + calendar webhook: reminder
+    texts, contractor alerts on calendar changes, ETA texts.
+  - CRM / Tasks Agent -- bus/ambiguous.js CRM surface: contact upsert,
+    task creation, never blocking a reply.
+  - Frontend UI Agent -- frontend/src/components + styles.css: dispatcher
+    board, job detail, call overlay.
+  - Persona / Conversation Agent -- agents.js, parseRequest.js, CallScreen
+    dialogue flow.
+  - Integration Agent -- frontend/src/api/ambiguous.js, schedule.js:
+    browser-side Ambiguous boundary and slot math.
+  - Media / Voice Agent -- AgentSurface, mic/STT/TTS, /voice/turn caller.
+  - Voice Telephony Agent -- Vapi/Bland wiring when calls land.
+  - Sim / Demo Agent -- scripts/chat.js, sim transport, demo drivers: a
+    fake phone that runs the whole loop with no providers.
+  - Seed / Fixture Agent -- scripts/seed-*.js: calendar fixtures for demos
+    and load testing.
+  - Test / E2E Agent -- bus/tests/integration.test.js, sms.test.js:
+    fake-Ambiguous + fake-phone end-to-end coverage.
+  - Docs Agent -- docs/*: keeps prose docs honest after merges and rewrites.
+  - Devops / Serve Agent -- serve.sh, watchdogs, tunnel setup, env files.
+
 SCOPE
 -----
 
