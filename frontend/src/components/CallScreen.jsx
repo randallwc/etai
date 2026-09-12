@@ -13,20 +13,15 @@ const SR =
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
 
-export default function CallScreen({ agent, agents, onSwitch }) {
-  const videoRef = useRef(null);
-  const pipRef = useRef(null);
-  const [cameraError, setCameraError] = useState(false);
+export default function CallScreen({ agent, agents, onSwitch, onExit }) {
   const [phase, setPhase] = useState("connecting");
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [awaitingTask, setAwaitingTask] = useState(false);
-  const [pipPos, setPipPos] = useState(null);
   const [sendOk, setSendOk] = useState(null);
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState(false);
-  const dragRef = useRef(null);
   const payloadRef = useRef(null);
   const recRef = useRef(null);
   const submitRef = useRef(null);
@@ -36,18 +31,6 @@ export default function CallScreen({ agent, agents, onSwitch }) {
     transcript: messages.map((m) => `${m.from}: ${m.text}`).join("\n"),
     endedAt: new Date().toISOString(),
   };
-
-  useEffect(() => {
-    let stream;
-    navigator.mediaDevices
-      ?.getUserMedia({ video: true, audio: true })
-      .then((s) => {
-        stream = s;
-        if (videoRef.current) videoRef.current.srcObject = s;
-      })
-      .catch(() => setCameraError(true));
-    return () => stream?.getTracks().forEach((t) => t.stop());
-  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -224,47 +207,9 @@ export default function CallScreen({ agent, agents, onSwitch }) {
     }, 800);
   }
 
-  function onPipDown(e) {
-    const rect = pipRef.current.getBoundingClientRect();
-    dragRef.current = {
-      dx: e.clientX - rect.left,
-      dy: e.clientY - rect.top,
-      w: rect.width,
-      h: rect.height,
-    };
-    pipRef.current.setPointerCapture(e.pointerId);
-  }
-
-  function onPipMove(e) {
-    if (!dragRef.current) return;
-    const { dx, dy, w, h } = dragRef.current;
-    const x = Math.min(Math.max(e.clientX - dx, 8), window.innerWidth - w - 8);
-    const y = Math.min(Math.max(e.clientY - dy, 8), window.innerHeight - h - 8);
-    setPipPos({ x, y });
-  }
-
-  function onPipUp() {
-    dragRef.current = null;
-  }
-
   return (
     <div className="ft-call" style={{ "--agent-color": agent.theme }}>
       <AgentSurface agent={agent} speaking={speaking} />
-
-      <div
-        ref={pipRef}
-        className="pip"
-        style={pipPos ? { left: pipPos.x, top: pipPos.y } : undefined}
-        onPointerDown={onPipDown}
-        onPointerMove={onPipMove}
-        onPointerUp={onPipUp}
-      >
-        {cameraError ? (
-          <div className="pip-off">No camera</div>
-        ) : (
-          <video ref={videoRef} autoPlay playsInline muted />
-        )}
-      </div>
 
       <div className="ft-top">
         <div className="agent-switcher">
@@ -280,12 +225,19 @@ export default function CallScreen({ agent, agents, onSwitch }) {
             </button>
           ))}
         </div>
-        <div className="ft-status">
-          {phase === "connecting" && `Calling ${agent.name}…`}
-          {phase === "live" && agent.name}
-          {phase === "sending" && "Sending to Ambiguous…"}
-          {phase === "done" &&
-            (sendOk ? "Sent to Ambiguous.ai" : "Handoff failed")}
+        <div className="ft-top-right">
+          <div className="ft-status">
+            {phase === "connecting" && `Calling ${agent.name}…`}
+            {phase === "live" && agent.name}
+            {phase === "sending" && "Sending to Ambiguous…"}
+            {phase === "done" &&
+              (sendOk ? "Sent to Ambiguous.ai" : "Handoff failed")}
+          </div>
+          {onExit && (
+            <button className="ft-exit" onClick={onExit}>
+              Board
+            </button>
+          )}
         </div>
       </div>
 
