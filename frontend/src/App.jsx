@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AGENTS } from "./agents.js";
-import { fetchCoworkers } from "./api/ambiguous.js";
 import { loadBoard, saveBoard, transition } from "./lib/jobs.js";
 import Board from "./components/Board.jsx";
 import JobDetail from "./components/JobDetail.jsx";
@@ -9,16 +8,10 @@ import CallScreen from "./components/CallScreen.jsx";
 const RESOLVED = new Set(["done", "canceled"]);
 
 export default function App() {
-  const [agents, setAgents] = useState(AGENTS);
+  const agents = AGENTS;
   const [board, setBoard] = useState(loadBoard);
   const [selectedId, setSelectedId] = useState(null);
   const [callAgent, setCallAgent] = useState(null);
-
-  useEffect(() => {
-    fetchCoworkers()
-      .then((list) => list?.length && setAgents(list))
-      .catch(() => {});
-  }, []);
 
   function updateJob(jobId, action) {
     setBoard((b) => {
