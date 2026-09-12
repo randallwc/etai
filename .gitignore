@@ -4,6 +4,6 @@ coverage/
 .env
 .env.local
 *.local
-.ambi/
+*.swp
+.secrets*
 .DS_Store
-coverage/
