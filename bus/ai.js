@@ -1,4 +1,5 @@
 const { partsInTz } = require("./calendar.js");
+const { channelPrompt } = require("./prompts.js");
 
 const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "other"];
 
@@ -13,9 +14,10 @@ function extractJson(text) {
   }
 }
 
-function prompt(text, todayLabel) {
+function prompt(text, todayLabel, channel) {
   return [
-    "You are the intent extractor for a contractor's scheduling assistant that works over SMS.",
+    "You are the intent extractor for a contractor's scheduling assistant.",
+    channelPrompt(channel),
     "Return ONLY raw JSON matching this shape, no markdown, no prose:",
     '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","slotChoice":0}',
     "Use null for any field that is absent. Rules:",
@@ -76,11 +78,11 @@ function normalize(raw) {
  */
 function createAi({ chat, env = process.env, now = () => new Date() }) {
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
-  async function classify(text) {
+  async function classify(text, channel) {
     try {
       const p = partsInTz(tz, now());
       const today = `${p.weekday} ${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
-      const res = await chat(prompt(text, today));
+      const res = await chat(prompt(text, today, channel));
       const parsed = extractJson(res?.response ?? "");
       return parsed ? normalize(parsed) : fallbackClassify(text);
     } catch {

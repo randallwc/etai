@@ -163,7 +163,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     }
     const n = parseChoice(msg.body, p.slots, tz);
     if (!n || n > p.slots.length) {
-      const retry = await ai.classify(msg.body);
+      const retry = await ai.classify(msg.body, msg.channel);
       if (
         (retry.intent === "book" || retry.intent === "reschedule") &&
         (retry.dayRef || retry.timePref)
@@ -290,7 +290,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     try {
       if (thread.pendingProposal) await proposalReply(msg, thread, say);
       else {
-        const intent = await ai.classify(msg.body);
+        const intent = await ai.classify(msg.body, msg.channel);
         store.setThread(msg.threadKey, { lastIntent: intent.intent });
         switch (intent.intent) {
           case "book":
