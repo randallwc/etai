@@ -146,7 +146,7 @@ function createCalendar({ ambi, env = process.env } = {}) {
     return idsP;
   }
 
-  const mem = stubCalendar(tz);
+  const mem = stubCalendar(tz, now);
   const pending = new Map();
   const remoteIds = new Map();
   const SYNC_HORIZON_MS = Number(env.CALENDAR_SYNC_DAYS ?? 45) * 864e5;
