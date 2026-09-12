@@ -119,6 +119,13 @@ function createAgentServer(env = process.env, overrides = {}) {
       await notify({ to: contractorPhone, body: text, threadKey: contractorPhone });
       return replyJson(res, 200, { sent: true, text });
     }
+    if (path === "/internal/client-update") {
+      const result = await loop.clientUpdate(body.phone);
+      if (body.phone && !result.sent) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "no job for that phone" } });
+      }
+      return replyJson(res, 200, result);
+    }
     return replyJson(res, 404, { error: { code: "invalid", message: "not found" } });
   }
 

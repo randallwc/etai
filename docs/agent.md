@@ -64,6 +64,12 @@ POST /voice/turn -- the voice integration seam. Body:
 POST /internal/digest -- texts the contractor the day's route
 (CONTRACT_PHONE). Wire to a cron or hit it manually in the demo.
 
+POST /internal/client-update -- texts each client their next confirmed
+booking plus a reschedule offer. Optional body {"phone":"+1..."} scopes
+it to one client (400 if that phone has no job); omitted, it fans out to
+every customer with a confirmed future job, one text per customer. Each
+send lands in the AgentAction log as client_update. -> 200 {"sent": n}.
+
 GET /healthz -- { ok, stub, ambiguous, messaging }.
 
 INTENTS
