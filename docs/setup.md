@@ -41,6 +41,18 @@ Each component has a Makefile; the root Makefile delegates.
   make frontend-build   frontend production build
   make frontend-test    frontend vitest suite
 
+Demo
+----
+
+  make demo   runs scripts/demo.js: boots messaging on the sim
+              transport and the agent on ephemeral ports, waits for the
+              agent to self-subscribe, then drives the four demo flows
+              (booking, running late, cancel, day summary) through
+              /simulate/inbound and prints the transcript. Exits
+              non-zero if an expected reply never arrives. With the
+              repo .env the agent uses the real Ambiguous calendar;
+              AGENT_STUB=1 forces the in-memory stub.
+
 Tests and hooks
 ---------------
 

@@ -132,3 +132,12 @@ contractor still gets confirmation but no client text goes out.
 Tool failures never reach the user as errors: the catch in handle()
 replies "couldn't reach the calendar, try again in a minute" and the
 failed call is logged in the action log.
+
+CRM sync is best-effort. When a client texts to book, the loop also
+upserts them into the workspace CRM via ambi.upsertContact (find by
+phone through /api/crm/contacts?q=, then PATCH the name or POST a new
+person). It runs inside the record() wrapper so it lands in the
+AgentAction log as crm_upsert_contact, but its failure is swallowed --
+the booking still completes and the error stays in the log. On success
+the returned contact id is stored on the customer as ambiguousCrmId,
+and later syncs for that phone are skipped.

@@ -1,6 +1,7 @@
 const http = require("node:http");
 const { createTransport } = require("./transports");
-const { fromBlueBubbles, fromSim, toE164 } = require("./normalize");
+const { createMailPoller } = require("./mailpoller");
+const { fromBlueBubbles, fromSim, fromAmbiguousMail, toE164 } = require("./normalize");
 
 const SEEN_CAP = 5000;
 const RECENT_CAP = 200;
@@ -96,6 +97,11 @@ function createMessagingServer(env = process.env) {
       const message = await accept(fromBlueBubbles(body));
       return reply(res, 202, { accepted: Boolean(message) });
     }
+    if (path === "/webhooks/ambimail") {
+      console.log("ambimail event:", JSON.stringify(body).slice(0, 2000));
+      const message = await accept(fromAmbiguousMail(body));
+      return reply(res, 202, { accepted: Boolean(message) });
+    }
     if (path === "/simulate/inbound") {
       const message = await accept(fromSim(body));
       if (!message) {
@@ -119,7 +125,9 @@ function createMessagingServer(env = process.env) {
       reply(res, 500, { error: { code: "upstream", message: "internal error" } });
     });
   });
-  return { server, subscribers, recent };
+  const mailPoller = createMailPoller(env, accept);
+  if (mailPoller) mailPoller.start();
+  return { server, subscribers, recent, mailPoller };
 }
 
 if (require.main === module) {

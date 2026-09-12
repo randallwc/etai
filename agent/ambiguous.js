@@ -31,6 +31,16 @@ function createAmbiguous(env = process.env) {
     return data;
   }
 
+  async function findContact(phone) {
+    const res = await api(`/crm/contacts?q=${encodeURIComponent(phone)}`);
+    const digits = phone.replace(/\D/g, "");
+    return (
+      (res.data ?? []).find(
+        (c) => (c.phone ?? "").replace(/\D/g, "") === digits
+      ) ?? null
+    );
+  }
+
   return {
     enabled,
     api,
@@ -66,6 +76,25 @@ function createAmbiguous(env = process.env) {
     },
     async deleteEvent(eventId) {
       await api(`/calendars/events/${eventId}`, { method: "DELETE" });
+    },
+    findContact,
+    async upsertContact({ name, phone }) {
+      const existing = await findContact(phone);
+      if (existing) {
+        if (name && name !== existing.name) {
+          const data = await api(`/crm/contacts/${existing.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name }),
+          });
+          return data.contact ?? data;
+        }
+        return existing;
+      }
+      const data = await api("/crm/contacts", {
+        method: "POST",
+        body: JSON.stringify({ type: "person", name: name ?? phone, phone }),
+      });
+      return data.contact ?? data;
     },
     async createTask(title) {
       const data = await api("/tasks", {

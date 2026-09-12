@@ -62,7 +62,7 @@ function optionsText(slots, dateLabel) {
  * Tool calls are logged as AgentActions; failures become a plain-language
  * reply, never a throw at the user.
  */
-function createLoop({ calendar, ai, store, notify, createTask, contractorPhone, tz = "America/Los_Angeles", now = () => new Date() }) {
+function createLoop({ calendar, ai, store, notify, createTask, upsertContact, contractorPhone, tz = "America/Los_Angeles", now = () => new Date() }) {
   const isContractor = (from) => contractorPhone && from === contractorPhone;
 
   async function reply(to, body) {
@@ -82,6 +82,18 @@ function createLoop({ calendar, ai, store, notify, createTask, contractorPhone, 
       store.logAction({ tool, args, error: e.message });
       throw e;
     }
+  }
+
+  async function crmSync(phone) {
+    if (!upsertContact) return;
+    const c = store.data.customers[phone];
+    if (!c || c.ambiguousCrmId) return;
+    const contact = await record(
+      "crm_upsert_contact",
+      { name: c.name ?? null, phone },
+      () => upsertContact({ name: c.name ?? null, phone })
+    ).catch(() => null);
+    if (contact?.id) store.upsertCustomer(phone, { ambiguousCrmId: contact.id });
   }
 
   function labeledSlots(slots) {
@@ -137,6 +149,7 @@ function createLoop({ calendar, ai, store, notify, createTask, contractorPhone, 
     }
     const slot = p.slots[n - 1];
     const customer = store.upsertCustomer(p.customerPhone, {});
+    await crmSync(p.customerPhone);
     if (p.mode === "reschedule" && p.jobId) {
       const job = store.data.jobs[p.jobId];
       await record("reschedule_job", { jobId: p.jobId, slot }, () =>
@@ -238,6 +251,7 @@ function createLoop({ calendar, ai, store, notify, createTask, contractorPhone, 
         switch (intent.intent) {
           case "book":
             store.upsertCustomer(msg.from, intent.name ? { name: intent.name } : {});
+            await crmSync(msg.from);
             await propose(msg, intent, "book", null, say);
             break;
           case "reschedule": {

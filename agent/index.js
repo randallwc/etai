@@ -38,7 +38,7 @@ function createAgentServer(env = process.env, overrides = {}) {
 
   const loop =
     overrides.loop ??
-    createLoop({ calendar, ai, store, notify, createTask: (t) => ambi.createTask(t), contractorPhone, tz });
+    createLoop({ calendar, ai, store, notify, createTask: (t) => ambi.createTask(t), upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null, contractorPhone, tz });
 
   function readBody(req) {
     return new Promise((resolve, reject) => {
