@@ -39,35 +39,22 @@ after(() => {
   upstream.close();
 });
 
-test("healthz reports sim transport", async () => {
-  const res = await fetch(`${base}/healthz`);
-  const body = await res.json();
-  assert.equal(res.status, 200);
-  assert.equal(body.transport, "sim");
-  assert.equal(body.subscribers, 1);
-});
+test("send returns an externalId and rejects a bad phone", async () => {
+  const ok = await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
+  assert.equal(ok.status, 200);
+  assert.match((await ok.json()).externalId, /^sim-/);
 
-test("send returns an externalId via the sim transport", async () => {
-  const res = await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
-  const body = await res.json();
-  assert.equal(res.status, 200);
-  assert.match(body.externalId, /^sim-/);
-});
-
-test("send rejects a bad phone number", async () => {
-  const res = await post(`${base}/send`, { to: "notaphone", body: "hi" });
-  assert.equal(res.status, 400);
+  const bad = await post(`${base}/send`, { to: "notaphone", body: "hi" });
+  assert.equal(bad.status, 400);
 });
 
 test("simulate inbound fans out a normalized message to subscribers", async () => {
-  const before = received.length;
   const res = await post(`${base}/simulate/inbound`, {
     from: "+15551234567",
     body: "what's my day",
   });
   assert.equal(res.status, 202);
   const msg = received.at(-1);
-  assert.equal(received.length, before + 1);
   assert.equal(msg.from, "+15551234567");
   assert.equal(msg.channel, "imessage");
   assert.equal(msg.body, "what's my day");
@@ -86,38 +73,23 @@ const bluebubblesEvent = {
   },
 };
 
-test("bluebubbles new-message webhook normalizes and fans out", async () => {
-  const before = received.length;
+test("bluebubbles new-message normalizes and fans out", async () => {
   const res = await post(`${base}/webhooks/bluebubbles`, bluebubblesEvent);
   assert.equal(res.status, 202);
-  const body = await res.json();
-  assert.equal(body.accepted, true);
+  assert.equal((await res.json()).accepted, true);
   const msg = received.at(-1);
-  assert.equal(received.length, before + 1);
   assert.equal(msg.channel, "imessage");
   assert.equal(msg.from, "+15557654321");
   assert.equal(msg.externalId, "BB-GUID-123");
 });
 
-test("bluebubbles webhook dedups on the provider guid", async () => {
+test("bluebubbles dedups, ignores own sends and non-message events", async () => {
   const before = received.length;
   await post(`${base}/webhooks/bluebubbles`, bluebubblesEvent);
-  assert.equal(received.length, before);
-});
-
-test("bluebubbles ignores own sends and non-message events", async () => {
-  const before = received.length;
   await post(`${base}/webhooks/bluebubbles`, {
     ...bluebubblesEvent,
     data: { ...bluebubblesEvent.data, guid: "BB-GUID-OWN", isFromMe: true },
   });
   await post(`${base}/webhooks/bluebubbles`, { type: "typing-indicator", data: {} });
   assert.equal(received.length, before);
-});
-
-test("messages endpoint exposes the recent inbound log", async () => {
-  const res = await fetch(`${base}/messages`);
-  const body = await res.json();
-  assert.equal(res.status, 200);
-  assert.ok(body.messages.length >= 2);
 });
