@@ -1,0 +1,12 @@
+{
+  "name": "etai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test calendar-agent/tests",
+    "test:calendar": "node calendar-agent/test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
