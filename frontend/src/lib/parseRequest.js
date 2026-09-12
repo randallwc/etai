@@ -4,6 +4,22 @@ const DONE_RE =
 const SCHEDULE_RE =
   /meet|schedul|book|call|lunch|dinner|appointment|sync|coffee/i;
 
+const TIMEISH_RE =
+  /^(\d{1,2}(:\d{2})?\s*(am|pm)|noon|midnight|the|a|an)$/i;
+
+const LOC_RE =
+  /\b(?:at|in)\s+([A-Za-z0-9 .,'#-]+?)(?=\s+(?:today|tomorrow|tonight|morning|afternoon|evening|next week|at\b|in\b)|\s*$)/gi;
+
+function extractLocation(text, withName) {
+  for (const m of text.matchAll(LOC_RE)) {
+    const loc = m[1].trim();
+    if (!TIMEISH_RE.test(loc) && loc.toLowerCase() !== withName?.toLowerCase()) {
+      return loc;
+    }
+  }
+  return null;
+}
+
 export function isDoneSignal(text) {
   return DONE_RE.test(text.trim());
 }
@@ -11,6 +27,7 @@ export function isDoneSignal(text) {
 export function parseRequest(text) {
   if (!SCHEDULE_RE.test(text)) return { kind: "task" };
   const withName = text.match(/with\s+([A-Za-z]+)/)?.[1] ?? null;
+  const location = extractLocation(text, withName);
   const t = text.toLowerCase();
   const dayOffset = /day after tomorrow/.test(t)
     ? 2
@@ -28,7 +45,7 @@ export function parseRequest(text) {
         : 10;
   const at = t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
   if (at) hour = (parseInt(at[1], 10) % 12) + (at[3] === "pm" ? 12 : 0);
-  return { kind: "schedule", withName, dayOffset, hour };
+  return { kind: "schedule", withName, dayOffset, hour, location };
 }
 
 export function offlineReply(text) {
