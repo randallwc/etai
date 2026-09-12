@@ -100,6 +100,71 @@ function formatSummary(calendars, events, from, to) {
   return lines.join("\n");
 }
 
+function parseEventText(text) {
+  if (typeof text !== "string") throw new Error("Event text must be a string.");
+  const [title, startText, durationText, ...descriptionParts] = text.split("|").map((part) => part.trim());
+  if (!title || !startText || !durationText) {
+    throw new Error("Use: title | 2026-09-14T10:00:00-07:00 | 60m | optional description");
+  }
+  if (!/(Z|[+-]\d{2}:\d{2})$/i.test(startText)) {
+    throw new Error("Start time must include an ISO 8601 timezone offset.");
+  }
+  const start = new Date(startText);
+  const duration = Number(durationText.replace(/\s*(m|min|mins|minutes)$/i, ""));
+  if (Number.isNaN(start.getTime()) || !Number.isInteger(duration) || duration < 1 || duration > 1440) {
+    throw new Error("Use a valid ISO start time and a duration from 1 to 1440 minutes.");
+  }
+  const end = new Date(start.getTime() + duration * 60000);
+  return {
+    title,
+    start_at: start.toISOString(),
+    end_at: end.toISOString(),
+    ...(descriptionParts.join(" | ") ? { description: descriptionParts.join(" | ") } : {})
+  };
+}
+
+function eventOverlaps(event, request) {
+  if (["cancelled", "canceled"].includes(event.status)) return false;
+  const start = new Date(event.start_at ?? event.start);
+  const end = new Date(event.end_at ?? event.end);
+  return start < new Date(request.end_at) && end > new Date(request.start_at);
+}
+
+async function createEventFromText(text, { call = callTool } = {}) {
+  let request;
+  try {
+    request = parseEventText(text);
+  } catch (error) {
+    return { status: "invalid", request: {}, message: error.message };
+  }
+  const start = new Date(request.start_at);
+  const end = new Date(request.end_at);
+  const [calendars, events] = await Promise.all([
+    call("list_calendars"),
+    call("list_events", {
+      start: new Date(start.getTime() - 86400000).toISOString(),
+      end: new Date(end.getTime() + 86400000).toISOString(),
+      singleEvents: "true",
+      orderBy: "startTime"
+    })
+  ]);
+  const conflicts = (events?.data ?? []).filter((event) => eventOverlaps(event, request));
+  if (conflicts.length) {
+    return {
+      status: "conflict",
+      request,
+      conflicts,
+      message: "The requested time overlaps an existing calendar event."
+    };
+  }
+  const calendar = (calendars?.data ?? []).find((item) => item.is_default) ?? calendars?.data?.[0];
+  if (!calendar?.id) {
+    return { status: "invalid", request, message: "No writable calendar is available." };
+  }
+  const event = await call("create_event", { calendar_id: calendar.id, ...request });
+  return { status: "created", request, event };
+}
+
 async function main() {
   if (!apiKey) {
     throw new Error("Set AMBIGUOUS_API_KEY before running this script.");
@@ -134,4 +199,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, callTool, formatSummary, readRpcMessage, rpc };
+module.exports = { main, callTool, createEventFromText, eventOverlaps, formatSummary, parseEventText, readRpcMessage, rpc };
