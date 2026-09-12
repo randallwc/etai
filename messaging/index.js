@@ -15,33 +15,43 @@ function createMessagingServer(env = process.env) {
   const seen = new Set();
   const recent = [];
 
-  function dedup(externalId) {
-    if (seen.has(externalId)) return false;
-    if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
-    seen.add(externalId);
-    return true;
-  }
-
   async function fanout(message) {
-    for (const url of subscribers) {
-      try {
-        await fetch(url, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(message),
-        });
-      } catch (e) {
-        console.error(`fanout to ${url} failed: ${e.message}`);
-      }
-    }
+    const results = await Promise.all(
+      [...subscribers].map(async (url) => {
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(message),
+          });
+          return res.ok;
+        } catch (e) {
+          console.error(`fanout to ${url} failed: ${e.message}`);
+          return false;
+        }
+      }),
+    );
+    return results.filter(Boolean).length;
   }
 
+  const inflight = new Set();
   async function accept(message) {
-    if (!message || !dedup(message.externalId)) return null;
+    if (!message) return null;
+    if (seen.has(message.externalId) || inflight.has(message.externalId))
+      return { message, duplicate: true };
+    inflight.add(message.externalId);
+    let delivered;
+    try {
+      delivered = await fanout(message);
+    } finally {
+      inflight.delete(message.externalId);
+    }
+    if (!delivered) return null;
+    if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
+    seen.add(message.externalId);
     recent.push(message);
     if (recent.length > RECENT_CAP) recent.shift();
-    await fanout(message);
-    return message;
+    return { message, delivered };
   }
 
   function readBody(req) {
@@ -106,14 +116,28 @@ function createMessagingServer(env = process.env) {
     if (path === "/webhooks/ambimail") {
       console.log("ambimail event:", JSON.stringify(body).slice(0, 2000));
       const message = await accept(fromAmbiguousMail(body));
+      if (/^(event|calendar)\./.test(body?.type ?? "")) {
+        for (const url of subscribers) {
+          const target = url.replace(/\/webhooks\/inbound\/?$/, "") + "/webhooks/calendar";
+          fetch(target, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          }).catch((e) => console.error(`calendar event to ${target} failed: ${e.message}`));
+        }
+      }
       return reply(res, 202, { accepted: Boolean(message) });
     }
     if (path === "/simulate/inbound") {
-      const message = await accept(fromSim(body));
-      if (!message) {
+      const inbound = fromSim(body);
+      if (!inbound) {
         return reply(res, 400, { error: { code: "invalid", message: "from and body required" } });
       }
-      return reply(res, 202, { externalId: message.externalId });
+      const r = await accept(inbound);
+      if (!r) {
+        return reply(res, 503, { accepted: false, error: { code: "unavailable", message: "no subscriber accepted" } });
+      }
+      return reply(res, 202, { accepted: true, externalId: inbound.externalId, duplicate: Boolean(r.duplicate) });
     }
     if (path === "/subscriptions") {
       if (typeof body.url !== "string" || !/^https?:\/\//.test(body.url)) {

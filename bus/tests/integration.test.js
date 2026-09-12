@@ -4,9 +4,13 @@ const { test, before, after } = require("node:test");
 const { createBusServer } = require("../index.js");
 const { createMessagingServer } = require("../../messaging/index.js");
 
-let messaging, bus, ambiguous, bluebubbles, msgBase;
+const CONTRACTOR = "+15551112222";
+const CLIENT = "+15557654321";
+
+let messaging, bus, ambiguous, bluebubbles, msgBase, ambiBase;
 const ambiHits = [];
 const phoneSends = [];
+let stallChat = false;
 
 function post(url, body) {
   return fetch(url, {
@@ -39,13 +43,15 @@ before(async () => {
       let payload;
       if (req.url === "/api/assistant/chat") {
         payload = { response: '{"intent":"day_summary"}', toolCalls: [], spear: null, status: "success" };
-      } else if (req.url.startsWith("/api/calendars/events")) {
-        payload = { data: [] };
       } else {
         payload = { data: [] };
       }
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(payload));
+      const finish = () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      if (req.url === "/api/assistant/chat" && stallChat) setTimeout(finish, 3000);
+      else finish();
     });
   });
   bluebubbles = http.createServer((req, res) => {
@@ -57,7 +63,7 @@ before(async () => {
       res.end(JSON.stringify({ data: { guid: "bb-out-1" } }));
     });
   });
-  const ambiBase = await listen(ambiguous);
+  ambiBase = await listen(ambiguous);
   const bbBase = await listen(bluebubbles);
 
   messaging = createMessagingServer({
@@ -70,6 +76,8 @@ before(async () => {
     AMBIGUOUS_BASE_URL: ambiBase,
     AMBIGUOUS_API_KEY: "ak_test",
     MESSAGING_URL: msgBase,
+    CONTRACT_PHONE: CONTRACTOR,
+    AI_CLASSIFY_TIMEOUT_MS: "200",
   }).server;
   const busBase = await listen(bus);
 
@@ -83,44 +91,117 @@ after(() => {
   bluebubbles.close();
 });
 
-test("a text travels messaging -> bus -> calendar ai -> back out as a reply", async () => {
+test("a text travels messaging -> bus -> assistant -> back out as a reply", async () => {
   const res = await post(`${msgBase}/simulate/inbound`, {
-    from: "+15557654321",
-    body: "what's my day",
+    from: CONTRACTOR,
+    body: "blocked on a part, update me on the plan",
   });
   assert.equal(res.status, 202);
 
   await waitFor(() => ambiHits.some((h) => h.path === "/api/assistant/chat"));
   const chat = ambiHits.find((h) => h.path === "/api/assistant/chat");
-  assert.match(chat.body.message, /what's my day/);
+  assert.match(chat.body.message, /blocked on a part/);
 
   await waitFor(() => ambiHits.some((h) => h.path.startsWith("/api/calendars/events")));
 
   await waitFor(() => phoneSends.length === 1);
   const send = phoneSends[0];
   assert.match(send.path, /^\/api\/v1\/message\/text\?password=pw$/);
-  assert.equal(send.body.chatGuid, "any;-;+15557654321");
+  assert.equal(send.body.chatGuid, `any;-;${CONTRACTOR}`);
   assert.equal(send.body.message, "Nothing on the calendar today.");
 });
 
+test("keyword intents answer without an assistant call", async () => {
+  const chatBefore = ambiHits.filter((h) => h.path === "/api/assistant/chat").length;
+  const sendsBefore = phoneSends.length;
+  await post(`${msgBase}/simulate/inbound`, { from: CONTRACTOR, body: "what's my day" });
+  await waitFor(() => phoneSends.length === sendsBefore + 1);
+  assert.equal(phoneSends.at(-1).body.message, "Nothing on the calendar today.");
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(
+    ambiHits.filter((h) => h.path === "/api/assistant/chat").length,
+    chatBefore,
+  );
+});
+
+test("a stalled assistant still produces a reply via keyword fallback", async () => {
+  stallChat = true;
+  const sendsBefore = phoneSends.length;
+  try {
+    await post(`${msgBase}/simulate/inbound`, { from: CLIENT, body: "cancel my visit" });
+    await waitFor(() => phoneSends.length === sendsBefore + 1);
+  } finally {
+    stallChat = false;
+  }
+  assert.match(phoneSends.at(-1).body.message, /don't see a booking to cancel/i);
+});
+
+test("a client saying they are late does not move the calendar", async () => {
+  const writesBefore = ambiHits.filter((h) => h.method === "PATCH" || h.method === "POST").length;
+  const sendsBefore = phoneSends.length;
+  await post(`${msgBase}/simulate/inbound`, { from: CLIENT, body: "running 15 late, sorry" });
+  await waitFor(() =>
+    phoneSends.some((s) => s.body.chatGuid === `any;-;${CLIENT}` && /let them know/i.test(s.body.message)),
+  );
+  assert.equal(
+    ambiHits.filter((h) => h.method === "PATCH" || h.method === "POST").length,
+    writesBefore,
+  );
+  assert.ok(phoneSends.length - sendsBefore <= 2);
+});
+
+test("fake phone loop: gateway text in -> reply out through ambimail", async () => {
+  const mailMessaging = createMessagingServer({
+    AMBIG_API: "ak_test",
+    AMBIGUOUS_BASE_URL: ambiBase,
+    MAIL_POLL_SECONDS: "0",
+  }).server;
+  const mailBase = await listen(mailMessaging);
+  const bus2 = createBusServer({
+    AMBIGUOUS_BASE_URL: ambiBase,
+    AMBIGUOUS_API_KEY: "ak_test",
+    MESSAGING_URL: mailBase,
+    CONTRACT_PHONE: CONTRACTOR,
+  }).server;
+  const bus2Base = await listen(bus2);
+  await post(`${mailBase}/subscriptions`, { url: `${bus2Base}/webhooks/inbound` });
+  try {
+    const res = await post(`${mailBase}/webhooks/ambimail`, {
+      id: "evt_loop1",
+      type: "email.received",
+      resourceId: "mail-loop-1",
+      data: {
+        senderEmail: "15557654321@vtext.com",
+        subject: "(no subject)",
+        bodyFull: "what's my day",
+      },
+    });
+    assert.equal((await res.json()).accepted, true);
+    await waitFor(() => ambiHits.some((h) => h.path === "/api/mail/send"));
+    const send = ambiHits.find((h) => h.path === "/api/mail/send");
+    assert.deepEqual(send.body.to, ["5557654321@vtext.com"]);
+    assert.match(send.body.body_markdown, /Nothing booked/);
+  } finally {
+    bus2.close();
+    mailMessaging.close();
+  }
+});
+
 test("duplicate delivery through messaging reaches the loop once", async () => {
-  const before = ambiHits.filter((h) => h.path === "/api/assistant/chat").length;
+  const sendsBefore = phoneSends.length;
   const event = {
     type: "new-message",
     data: {
       guid: "BB-DUP-1",
       text: "running 20 late",
       isFromMe: false,
-      handle: { address: "+15557654321" },
+      handle: { address: CONTRACTOR },
       dateCreated: Date.now(),
     },
   };
   await post(`${msgBase}/webhooks/bluebubbles`, event);
   await post(`${msgBase}/webhooks/bluebubbles`, event);
-  await waitFor(() => phoneSends.length >= 2);
+  await waitFor(() => phoneSends.length === sendsBefore + 1);
   await new Promise((r) => setTimeout(r, 50));
-  assert.equal(
-    ambiHits.filter((h) => h.path === "/api/assistant/chat").length,
-    before + 1,
-  );
+  assert.match(phoneSends.at(-1).body.message, /don't see an active job/i);
 });

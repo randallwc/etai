@@ -2,7 +2,7 @@ const { fromMail } = require("./normalize");
 
 function createMailPoller(env, accept) {
   const key = env.AMBIG_API ?? env.AMBIGUOUS_API_KEY;
-  const seconds = Number(env.MAIL_POLL_SECONDS ?? 15);
+  const seconds = Number(env.MAIL_POLL_SECONDS ?? 5);
   if (!key || !(seconds > 0)) return null;
   const base = (env.AMBIGUOUS_BASE_URL ?? "https://app.ambiguous.ai").replace(
     /\/$/,
@@ -81,7 +81,9 @@ function createMailPoller(env, accept) {
         if (!real) continue;
         message.body = real;
       }
-      if (await accept(message)) emitted += 1;
+      const r = await accept(message);
+      if (!r) continue;
+      if (!r.duplicate) emitted += 1;
       await markRead(item.id);
     }
     return emitted;

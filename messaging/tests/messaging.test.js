@@ -66,6 +66,55 @@ test("ambimail sends the text as body_markdown so the body survives", async () =
   assert.equal(sent.body.body_markdown, "hi there");
 });
 
+test("ambimail GATEWAY_MAP blasts a mapped number across carriers", async () => {
+  const { createTransport } = require("../transports.js");
+  const sends = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    sends.push(JSON.parse(opts.body));
+    return new Response(JSON.stringify({ id: "m1" }), { status: 200 });
+  };
+  try {
+    const t = createTransport({
+      AMBIG_API: "ak_x",
+      GATEWAY_MAP: "+12066169257:tmomail.net+txt.att.net+vtext.com",
+    });
+    await t.send({ to: "+12066169257", body: "hi" });
+    assert.deepEqual(sends.map((s) => s.to[0]), [
+      "2066169257@tmomail.net",
+      "2066169257@txt.att.net",
+      "2066169257@vtext.com",
+    ]);
+    sends.length = 0;
+    await t.send({ to: "+15551234567", body: "hi" });
+    assert.deepEqual(sends.map((s) => s.to[0]), ["5551234567@vtext.com"]);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("ambimail send succeeds when some gateways reject", async () => {
+  const { createTransport } = require("../transports.js");
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const to = JSON.parse(opts.body).to[0];
+    if (to.endsWith("@msg.fi.google.com")) {
+      return new Response(JSON.stringify({ error: "suppressed" }), { status: 400 });
+    }
+    return new Response(JSON.stringify({ id: "m1" }), { status: 200 });
+  };
+  try {
+    const t = createTransport({
+      AMBIG_API: "ak_x",
+      GATEWAY_MAP: "2066169257:msg.fi.google.com+vtext.com",
+    });
+    const r = await t.send({ to: "+12066169257", body: "hi" });
+    assert.equal(r.externalId, "m1");
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
 test("send returns an externalId and rejects a bad phone", async () => {
   const ok = await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
   assert.equal(ok.status, 200);
@@ -139,6 +188,34 @@ test("ambimail email.received normalizes gateway sender and fans out", async () 
   assert.equal(msg.body, "yes 2 works");
 });
 
+test("ambimail normalizes the live payload shape: senderEmail + bodyFull", async () => {
+  const res = await post(`${base}/webhooks/ambimail`, {
+    id: "evt_live1",
+    type: "email.received",
+    resourceId: "mail-live-1",
+    data: {
+      senderEmail: "4253625633@vzwpix.com",
+      subject: "(no subject)",
+      bodyPreview: "see you at 3",
+      bodyFull: "see you at 3",
+    },
+  });
+  assert.equal((await res.json()).accepted, true);
+  const msg = received.at(-1);
+  assert.equal(msg.from, "+14253625633");
+  assert.equal(msg.body, "see you at 3");
+});
+
+test("ambimail drops (no content) MMS replies -- the poller reads the attachment", async () => {
+  const before = received.length;
+  const res = await post(`${base}/webhooks/ambimail`, {
+    type: "email.received",
+    data: { senderEmail: "4253625633@vzwpix.com", bodyFull: "(no content)", bodyPreview: "(no content)" },
+  });
+  assert.equal((await res.json()).accepted, false);
+  assert.equal(received.length, before);
+});
+
 test("ambimail rejects non-gateway senders and non-mail events", async () => {
   const before = received.length;
   await post(`${base}/webhooks/ambimail`, {
@@ -157,7 +234,7 @@ test("redelivery of the same mail id is deduped, not fanned out again", async ()
   await post(`${base}/webhooks/ambimail`, event);
   const before = received.length;
   const res = await post(`${base}/webhooks/ambimail`, event);
-  assert.equal((await res.json()).accepted, false);
+  assert.equal((await res.json()).accepted, true);
   assert.equal(received.length, before);
 });
 
@@ -173,4 +250,61 @@ test("healthz and /messages report live state", async () => {
 test("subscriptions rejects a non-http url", async () => {
   const res = await post(`${base}/subscriptions`, { url: "ftp://x" });
   assert.equal(res.status, 400);
+});
+
+test("inbound with no subscriber is refused, then delivered when one appears", async () => {
+  const lone = createMessagingServer({}).server;
+  await new Promise((r) => lone.listen(0, r));
+  const loneBase = `http://127.0.0.1:${lone.address().port}`;
+  try {
+    const event = {
+      type: "new-message",
+      data: {
+        guid: "BB-HELD-1",
+        text: "hello?",
+        isFromMe: false,
+        handle: { address: "+15557654321" },
+        dateCreated: 1757700000000,
+      },
+    };
+    const r1 = await post(`${loneBase}/webhooks/bluebubbles`, event);
+    assert.equal((await r1.json()).accepted, false);
+    await post(`${loneBase}/subscriptions`, { url: `${upstreamBase}/webhooks/inbound` });
+    const r2 = await post(`${loneBase}/webhooks/bluebubbles`, event);
+    assert.equal((await r2.json()).accepted, true);
+    assert.ok(received.some((m) => m.externalId === "BB-HELD-1"));
+  } finally {
+    lone.close();
+  }
+});
+
+test("simulate inbound reports 503 when no subscriber accepts", async () => {
+  const lone = createMessagingServer({}).server;
+  await new Promise((r) => lone.listen(0, r));
+  const loneBase = `http://127.0.0.1:${lone.address().port}`;
+  try {
+    const res = await post(`${loneBase}/simulate/inbound`, { from: "+15557654321", body: "hi" });
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).accepted, false);
+  } finally {
+    lone.close();
+  }
+});
+
+test("ambimail send retries once on a 5xx or network blip", async () => {
+  const { createTransport } = require("../transports.js");
+  let hits = 0;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => {
+    hits += 1;
+    if (hits === 1) throw new Error("socket hangup");
+    return new Response(JSON.stringify({ id: "m-retry" }), { status: 200 });
+  };
+  try {
+    const r = await createTransport({ AMBIG_API: "ak_x" }).send({ to: "+15551234567", body: "hi" });
+    assert.equal(r.externalId, "m-retry");
+    assert.equal(hits, 2);
+  } finally {
+    globalThis.fetch = orig;
+  }
 });

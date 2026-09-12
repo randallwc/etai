@@ -55,14 +55,36 @@ function createStore(file = null) {
       .sort((a, b) => new Date(a.window.start) - new Date(b.window.start))[0] ?? null;
   }
 
-  function jobForPhone(phone) {
+  function jobsForPhone(phone) {
     const c = data.customers[phone];
-    if (!c) return null;
-    return (
-      Object.values(data.jobs)
-        .filter((j) => j.customerId === c.id && j.status !== "canceled" && j.status !== "done")
-        .sort((a, b) => new Date(b.window.start) - new Date(a.window.start))[0] ?? null
-    );
+    if (!c) return [];
+    return Object.values(data.jobs)
+      .filter((j) => j.customerId === c.id && j.status !== "canceled" && j.status !== "done")
+      .sort((a, b) => new Date(a.window.start) - new Date(b.window.start));
+  }
+
+  function jobForPhone(phone) {
+    return jobsForPhone(phone).at(-1) ?? null;
+  }
+
+  function upcomingJobs(nowMs, limit = 5) {
+    return Object.values(data.jobs)
+      .filter(
+        (j) =>
+          (j.status === "confirmed" || j.status === "en_route") &&
+          new Date(j.window.end).getTime() > nowMs
+      )
+      .sort((a, b) => new Date(a.window.start) - new Date(b.window.start))
+      .slice(0, limit);
+  }
+
+  function pushHistory(threadKey, role, body) {
+    const t = data.threads[threadKey] ?? { threadKey };
+    t.history = [...(t.history ?? []), { role, body, at: new Date().toISOString() }].slice(-8);
+    t.updatedAt = new Date().toISOString();
+    data.threads[threadKey] = t;
+    save();
+    return t;
   }
 
   function setThread(threadKey, patch) {
@@ -92,7 +114,10 @@ function createStore(file = null) {
     upsertCustomer,
     addJob,
     nextJob,
+    jobsForPhone,
     jobForPhone,
+    upcomingJobs,
+    pushHistory,
     thread: (k) => data.threads[k],
     setThread,
     logAction,
