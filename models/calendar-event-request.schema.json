@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://etai/models/calendar-event-request",
   "title": "Calendar Event Text Request",
-  "description": "Text-only scheduling input accepted by calendar-agent. The text is pipe-delimited: title | ISO 8601 start with offset | duration in minutes | client name | client contact | location | request.",
+  "description": "Text-only scheduling input accepted by calendar-agent. The text is pipe-delimited: title | ISO 8601 start with offset | duration in minutes | client name | client contact containing an email address | location | request.",
   "$defs": {
     "eventText": {
       "type": "string",
@@ -16,22 +16,24 @@
       "type": "object",
       "required": ["status", "request"],
       "properties": {
-        "status": { "enum": ["created", "conflict", "invalid"] },
+        "status": { "enum": ["created", "conflict", "invalid", "notification_failed"] },
         "request": {
           "type": "object",
-          "required": ["title", "start_at", "end_at", "description", "location"],
+          "required": ["title", "start_at", "end_at", "description", "location", "attendees"],
           "properties": {
             "title": { "type": "string", "minLength": 1 },
             "start_at": { "type": "string", "format": "date-time" },
             "end_at": { "type": "string", "format": "date-time" },
             "description": { "type": "string", "minLength": 1 },
-            "location": { "type": "string", "minLength": 1 }
+            "location": { "type": "string", "minLength": 1 },
+            "attendees": { "type": "array", "minItems": 1, "items": { "type": "string", "format": "email" } }
           },
           "additionalProperties": false
         },
         "conflicts": { "type": "array", "items": { "type": "object" } },
         "event": { "type": "object" },
-        "message": { "type": "string" }
+        "message": { "type": "string" },
+        "notifications": { "type": "array", "items": { "type": "object" } }
       },
       "additionalProperties": false
     },
@@ -39,7 +41,7 @@
       "type": "object",
       "required": ["status", "request"],
       "properties": {
-        "status": { "enum": ["updated", "conflict", "invalid"] },
+        "status": { "enum": ["updated", "conflict", "invalid", "notification_failed"] },
         "request": {
           "type": "object",
           "required": ["id", "start_at", "end_at"],
@@ -52,7 +54,8 @@
         },
         "conflicts": { "type": "array", "items": { "type": "object" } },
         "event": { "type": "object" },
-        "message": { "type": "string" }
+        "message": { "type": "string" },
+        "notifications": { "type": "array", "items": { "type": "object" } }
       },
       "additionalProperties": false
     }

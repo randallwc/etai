@@ -115,13 +115,16 @@ function parseEventText(text) {
   if (Number.isNaN(start.getTime()) || !Number.isInteger(duration) || duration < 1 || duration > 1440) {
     throw new Error("Use a valid ISO start time and a duration from 1 to 1440 minutes.");
   }
+  const clientEmail = clientContact.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+  if (!clientEmail) throw new Error("Client contact must include an email address for calendar updates.");
   const end = new Date(start.getTime() + duration * 60000);
   return {
     title,
     start_at: start.toISOString(),
     end_at: end.toISOString(),
     location,
-    description: `Client: ${clientName}\nContact: ${clientContact}\nRequest: ${request}`
+    description: `Client: ${clientName}\nContact: ${clientContact}\nRequest: ${request}`,
+    attendees: [clientEmail]
   };
 }
 
@@ -147,6 +150,25 @@ function parseRescheduleText(text) {
     throw new Error("Use a valid ISO start time and a duration from 1 to 1440 minutes.");
   }
   return { id, start_at: start.toISOString(), end_at: new Date(start.getTime() + duration * 60000).toISOString() };
+}
+
+function attendeeEmails(event) {
+  const emails = (event?.attendees ?? []).map((attendee) => {
+    if (typeof attendee === "string") return attendee;
+    return attendee.email ?? attendee.email_address ?? attendee.user?.email;
+  });
+  return [...new Set(emails.filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))];
+}
+
+async function notifyParties(call, emails, subject, body) {
+  return Promise.all(emails.map(async (email) => {
+    try {
+      const message = await call("send_email", { to: [email], subject, body_markdown: body });
+      return { email, status: "sent", message };
+    } catch (error) {
+      return { email, status: "failed", message: error.message };
+    }
+  }));
 }
 
 async function createEventFromText(text, { call = callTool } = {}) {
@@ -181,7 +203,13 @@ async function createEventFromText(text, { call = callTool } = {}) {
     return { status: "invalid", request, message: "No writable calendar is available." };
   }
   const event = await call("create_event", { calendar_id: calendar.id, ...request });
-  return { status: "created", request, event };
+  const notifications = await notifyParties(
+    call,
+    request.attendees,
+    `Appointment confirmed: ${request.title}`,
+    `Your appointment is confirmed.\n\nWhen: ${request.start_at} to ${request.end_at}\nWhere: ${request.location}\n\n${request.description}`
+  );
+  return { status: notifications.every((notification) => notification.status === "sent") ? "created" : "notification_failed", request, event, notifications };
 }
 
 async function rescheduleEventFromText(text, { call = callTool } = {}) {
@@ -193,12 +221,19 @@ async function rescheduleEventFromText(text, { call = callTool } = {}) {
   }
   const start = new Date(request.start_at);
   const end = new Date(request.end_at);
-  const events = await call("list_events", {
-    start: new Date(start.getTime() - 86400000).toISOString(),
-    end: new Date(end.getTime() + 86400000).toISOString(),
-    singleEvents: "true",
-    orderBy: "startTime"
-  });
+  const [current, events] = await Promise.all([
+    call("get_event", { id: request.id }),
+    call("list_events", {
+      start: new Date(start.getTime() - 86400000).toISOString(),
+      end: new Date(end.getTime() + 86400000).toISOString(),
+      singleEvents: "true",
+      orderBy: "startTime"
+    })
+  ]);
+  const attendees = attendeeEmails(current?.data ?? current?.event ?? current);
+  if (!attendees.length) {
+    return { status: "invalid", request, message: "The event has no attendee email to notify." };
+  }
   const conflicts = (events?.data ?? []).filter((event) => event.id !== request.id && eventOverlaps(event, request));
   if (conflicts.length) {
     return {
@@ -209,7 +244,14 @@ async function rescheduleEventFromText(text, { call = callTool } = {}) {
     };
   }
   const event = await call("update_event", request);
-  return { status: "updated", request, event };
+  const title = current?.title ?? current?.data?.title ?? "Appointment";
+  const notifications = await notifyParties(
+    call,
+    attendees,
+    `Appointment updated: ${title}`,
+    `Your appointment has been rescheduled.\n\nNew time: ${request.start_at} to ${request.end_at}`
+  );
+  return { status: notifications.every((notification) => notification.status === "sent") ? "updated" : "notification_failed", request, event, notifications };
 }
 
 async function main() {
@@ -246,4 +288,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, callTool, createEventFromText, eventOverlaps, formatSummary, parseEventText, parseRescheduleText, readRpcMessage, rescheduleEventFromText, rpc };
+module.exports = { attendeeEmails, main, callTool, createEventFromText, eventOverlaps, formatSummary, notifyParties, parseEventText, parseRescheduleText, readRpcMessage, rescheduleEventFromText, rpc };
