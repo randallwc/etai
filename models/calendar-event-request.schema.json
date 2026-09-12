@@ -8,6 +8,10 @@
       "type": "string",
       "pattern": "^\\s*[^|]+\\|\\s*\\d{4}-\\d{2}-\\d{2}T[^|]+\\|\\s*\\d+\\s*(?:m|min|mins|minutes)?\\|\\s*[^|]+\\|\\s*[^|]+\\|\\s*[^|]+\\|\\s*.+$"
     },
+    "rescheduleText": {
+      "type": "string",
+      "pattern": "^\\s*[^|]+\\|\\s*\\d{4}-\\d{2}-\\d{2}T[^|]+\\|\\s*\\d+\\s*(?:m|min|mins|minutes)?\\s*$"
+    },
     "createResult": {
       "type": "object",
       "required": ["status", "request"],
@@ -22,6 +26,27 @@
             "end_at": { "type": "string", "format": "date-time" },
             "description": { "type": "string", "minLength": 1 },
             "location": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "conflicts": { "type": "array", "items": { "type": "object" } },
+        "event": { "type": "object" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "rescheduleResult": {
+      "type": "object",
+      "required": ["status", "request"],
+      "properties": {
+        "status": { "enum": ["updated", "conflict", "invalid"] },
+        "request": {
+          "type": "object",
+          "required": ["id", "start_at", "end_at"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "start_at": { "type": "string", "format": "date-time" },
+            "end_at": { "type": "string", "format": "date-time" }
           },
           "additionalProperties": false
         },

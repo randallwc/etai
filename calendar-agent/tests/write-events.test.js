@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { createEventFromText, parseEventText } = require("../main");
+const { createEventFromText, parseEventText, parseRescheduleText, rescheduleEventFromText } = require("../main");
 
 test("parseEventText accepts a text-only event request", () => {
   assert.deepEqual(
@@ -50,4 +50,37 @@ test("createEventFromText reports invalid text without calendar calls", async ()
   const result = await createEventFromText("Team sync tomorrow", { call: async () => assert.fail("should not call") });
   assert.equal(result.status, "invalid");
   assert.match(result.message, /Use:/);
+});
+
+test("parseRescheduleText accepts an event ID, start time, and duration", () => {
+  assert.deepEqual(
+    parseRescheduleText("event-1 | 2026-09-14T13:00:00-07:00 | 30m"),
+    { id: "event-1", start_at: "2026-09-14T20:00:00.000Z", end_at: "2026-09-14T20:30:00.000Z" }
+  );
+});
+
+test("rescheduleEventFromText updates a clear time and ignores its own event", async () => {
+  const calls = [];
+  const call = async (name, args) => {
+    calls.push({ name, args });
+    if (name === "list_events") {
+      return { data: [{ id: "event-1", start_at: "2026-09-14T20:00:00.000Z", end_at: "2026-09-14T20:30:00.000Z" }] };
+    }
+    return { id: args.id, ...args };
+  };
+  const result = await rescheduleEventFromText("event-1 | 2026-09-14T13:00:00-07:00 | 30m", { call });
+  assert.equal(result.status, "updated");
+  assert.deepEqual(calls.map(({ name }) => name), ["list_events", "update_event"]);
+  assert.equal(calls[1].args.id, "event-1");
+});
+
+test("rescheduleEventFromText refuses a conflict without updating", async () => {
+  const calls = [];
+  const call = async (name) => {
+    calls.push(name);
+    return { data: [{ id: "event-2", start_at: "2026-09-14T20:15:00.000Z", end_at: "2026-09-14T20:45:00.000Z" }] };
+  };
+  const result = await rescheduleEventFromText("event-1 | 2026-09-14T13:00:00-07:00 | 30m", { call });
+  assert.equal(result.status, "conflict");
+  assert.deepEqual(calls, ["list_events"]);
 });
