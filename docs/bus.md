@@ -96,9 +96,11 @@ day_summary, other. Entities extracted when present: dayRef
 (today/tomorrow/weekday name), timePref, durationMinutes, delayMinutes,
 name. The loop then:
 
-  book        -> proposeSlots offers up to 3 open times; the reply picks
-                 by number, ordinal, or clock time ("9am works"). Books
-                 the event, replies "Locked in", texts the contractor.
+  book        -> proposeSlots offers up to 3 numbered open times; the
+                 reply picks by number, ordinal, or clock time ("9am
+                 works"). Books the event, builds the job packet
+                 (packet.js), replies "Locked in" plus the public
+                 intake-form link, texts the contractor.
   reschedule  -> same proposal flow; on pick, updateEvent moves the
                  existing Ambiguous event; counterparty notified.
   cancel      -> cancelEvent; the other party is told the slot is free
@@ -163,3 +165,13 @@ AgentAction log as crm_upsert_contact, but its failure is swallowed --
 the booking still completes and the error stays in the log. On success
 the returned contact id is stored on the customer as ambiguousCrmId,
 and later syncs for that phone are skipped.
+
+The job packet runs inside record() as job_packet: after book_job
+lands, packet.js fans out to Ambiguous - a published intake form
+(public link texted to the client), a work-order doc, a Sign draft of
+the work authorization prepared to preview_pending (agents cannot
+confirm-send; the contractor taps send in the Sign UI), a CRM deal and
+timeline note when the client has ambiguousCrmId, and a linked
+follow-up task due the job day. Each step is non-fatal; failures land
+in packet.errors (models/job-packet.schema.json) and the packet is
+stored on the job record so GET /state surfaces it to the console.

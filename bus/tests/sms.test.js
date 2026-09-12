@@ -14,6 +14,7 @@ let smsMsgBase, simMsgBase;
 const mailOut = [];
 const patchedMail = [];
 const eventWrites = [];
+const packetWrites = [];
 const remoteEvents = [];
 const inbox = [];
 
@@ -88,6 +89,21 @@ before(async () => {
         payload = { data: [] };
       } else if (path === "/api/tasks") {
         payload = { task: { id: "t-1", title: body.title } };
+      } else if (path === "/api/forms") {
+        packetWrites.push({ step: "form", body });
+        payload = { id: "form-1", slug: "intake-test", workspace_slug: "etai-workspace", ...body };
+      } else if (path === "/api/documents") {
+        packetWrites.push({ step: "doc", body });
+        payload = { id: "doc-1", ...body };
+      } else if (path === "/api/sign") {
+        packetWrites.push({ step: "sign", body });
+        payload = { document: { id: "sign-1", status: "draft" } };
+      } else if (path === "/api/crm/deals") {
+        packetWrites.push({ step: "deal", body });
+        payload = { deal: { id: "deal-1", ...body } };
+      } else if (path === "/api/crm/activities") {
+        packetWrites.push({ step: "activity", body });
+        payload = { activity: { id: "act-1" } };
       } else if (path === "/api/mail/send") {
         mailOut.push(body);
         payload = { id: `mail-${mailOut.length}` };
@@ -162,9 +178,22 @@ test("a booking is proposed and confirmed entirely over sms", async () => {
 
   await gatewayMail("sms-3", "1");
   await waitFor(() => mailOut.some((m) => /Locked in/.test(m.body_markdown)));
+  const locked = mailOut.find((m) => /Locked in/.test(m.body_markdown));
+  assert.match(
+    locked.body_markdown,
+    /app\.ambiguous\.ai\/f\/etai-workspace\/intake-test/,
+  );
   await waitFor(() =>
     mailOut.some((m) => m.to[0] === CONTRACTOR_GATEWAY && /New booking/.test(m.body_markdown)),
   );
+  assert.match(
+    mailOut.find((m) => /New booking/.test(m.body_markdown)).body_markdown,
+    /work auth is drafted in Sign/,
+  );
+  assert.ok(packetWrites.some((w) => w.step === "form"));
+  assert.ok(packetWrites.some((w) => w.step === "doc"));
+  assert.ok(packetWrites.some((w) => w.step === "sign"));
+  assert.ok(packetWrites.some((w) => w.step === "deal"));
   await smsCal.sync();
   const created = eventWrites.find((w) => w.method === "POST");
   assert.match(created.body.title, /fix my sink/);

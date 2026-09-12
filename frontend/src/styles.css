@@ -614,6 +614,44 @@ body {
   margin-bottom: 2px;
 }
 
+.jd-paperwork {
+  background: var(--accent-subtle);
+  border: 1px solid #dbe1ff;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.jd-paperwork > span {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.jd-paperwork-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jd-paperwork-links a {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: #fff;
+  padding: 6px 14px;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 1px solid #dbe1ff;
+}
+
+.jd-paperwork-links a:hover {
+  filter: brightness(0.96);
+}
+
 .jd-cancel {
   align-self: center;
   background: none;

@@ -6,6 +6,7 @@ const { createCalendar } = require("./calendar.js");
 const { createAi } = require("./ai.js");
 const { createStore } = require("./state.js");
 const { createLoop } = require("./loop.js");
+const { createJobPacket } = require("./packet.js");
 const { createTts } = require("./tts.js");
 const { startReminders } = require("./reminders.js");
 
@@ -52,7 +53,7 @@ function createBusServer(env = process.env, overrides = {}) {
 
   const loop =
     overrides.loop ??
-    createLoop({ calendar, ai, store, notify, createTask: (t) => ambi.createTask(t), upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null, contractorPhone, tz });
+    createLoop({ calendar, ai, store, notify, createTask: (t) => ambi.createTask(t), upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null, createPacket: ambi.enabled ? (a) => createJobPacket({ ambi, ...a }) : null, contractorPhone, tz });
 
   function fmtWhen(iso) {
     if (!iso) return "soon";

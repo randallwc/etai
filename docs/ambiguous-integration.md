@@ -50,6 +50,41 @@ transcript. Content accepts a markdown-ish string and wraps it into block
 JSON server-side. This is our end-of-call validation handoff: the
 transcript lands in the workspace where any coworker can read it.
 
+The booking packet (verified live 2026-09-12)
+---------------------------------------------
+
+When a booking lands, bus/packet.js creates the paperwork:
+
+POST /api/forms {title, description, fields, is_published: true} returns
+the form with slug and workspace_slug. Field types are fixed:
+short_text, long_text, number, email, phone, date, time, select,
+multi_select, rating, scale, file_upload, section, payment. The public
+fill page is https://app.ambiguous.ai/f/{workspace_slug}/{slug}; the
+unauthenticated read is GET /api/forms/w/{workspace}/{slug} and
+submissions POST to .../submit with {data: {fieldId: value}}. We read
+results via GET /api/forms/{id}/responses. We text the fill link to the
+customer at booking time.
+
+POST /api/sign {title, source_type: "doc", source_doc_id} creates a
+draft and renders a PDF. POST /api/sign/{id}/signers {email, name} adds
+a signer (agents cannot BE signers). POST /api/sign/{id}/fields places
+fields with normalized 0-1 coordinates (x, y, w, h each <= 1, page is
+1-based). POST /api/sign/{id}/prepare-send moves draft ->
+preview_pending. The final POST /api/sign/{id}/confirm-send returns
+CONFIRM_REQUIRES_HUMAN - legally binding sends need a human tap, so we
+leave the doc prepared in the Sign UI. List route is GET /api/sign;
+GET /api/sign/{id} is the item route (GET /api/sign/documents 404s as a
+bad UUID - do not guess a /documents suffix).
+
+POST /api/crm/deals {title, contact_id, primary_contact_id} creates an
+open deal (pipeline/stage optional). POST /api/crm/activities
+{type: "note", contact_id, deal_id, subject, body} logs the booking on
+the contact timeline. POST /api/tasks accepts contact_id, deal_id, and
+due_date for linked follow-ups.
+
+POST /api/calendars/{id}/publish returns a public .ics feed_url. Not
+used: it exposes the contractor's whole calendar, not just one job.
+
 Gotchas
 -------
 

@@ -89,7 +89,7 @@ function optionsText(slots, dateLabel, description) {
  * Tool calls are logged as AgentActions; failures become a plain-language
  * reply, never a throw at the user.
  */
-function createLoop({ calendar, ai, store, notify, createTask, upsertContact, contractorPhone, tz = "America/Los_Angeles", now = () => new Date() }) {
+function createLoop({ calendar, ai, store, notify, createTask, upsertContact, createPacket, contractorPhone, tz = "America/Los_Angeles", now = () => new Date() }) {
   const isContractor = (from) => contractorPhone && from === contractorPhone;
 
   async function reply(to, body) {
@@ -221,11 +221,17 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         new Date(j.window.start) < new Date(slot.end) &&
         new Date(j.window.end) > new Date(slot.start)
     );
+    const dayEvents = await record("get_availability", { date: slotDate, recheck: true }, () =>
+      calendar.listDay({ date: slotDate })
+    );
     const open =
       !clash &&
-      (await record("get_availability", { date: slotDate, durationMinutes: durMin, recheck: true }, () =>
-        calendar.proposeSlots({ date: slotDate, durationMinutes: durMin, count: 10 })
-      )).some((s) => s.start.toISOString() === slot.start);
+      !dayEvents.some(
+        (e) =>
+          e.status !== "canceled" &&
+          new Date(e.start) < new Date(slot.end) &&
+          new Date(e.end) > new Date(slot.start)
+      );
     if (!open) {
       await say("That time was just taken -");
       return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description, location: p.location }, p.mode, p.jobId, say);
@@ -267,10 +273,10 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       throw e;
     });
     if (!ev) {
-      await say("That time was just taken —");
-      return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description }, p.mode, p.jobId, say);
+      await say("That time was just taken -");
+      return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description, location: p.location }, p.mode, p.jobId, say);
     }
-    store.addJob({
+    const job = store.addJob({
       customerId: customer.id,
       contractorId: "contractor",
       ambiguousEventId: ev.id,
@@ -280,10 +286,35 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       source: msg.channel === "voice" ? "call" : "message",
     });
     store.setThread(msg.threadKey, { pendingProposal: null });
+    const packet = createPacket
+      ? await record("job_packet", { jobId: job.id }, () =>
+          createPacket({
+            job,
+            customer,
+            location: p.location,
+            when: `${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}`,
+          })
+        ).catch(() => null)
+      : null;
+    if (packet) {
+      job.packet = packet;
+      store.save();
+    }
+    const link =
+      packet?.formUrl && msg.channel !== "voice"
+        ? ` Quick intake form before the visit: ${packet.formUrl}`
+        : "";
+    const paperwork = packet?.signDocumentId
+      ? " Intake form sent; work auth is drafted in Sign - tap send when ready."
+      : packet
+        ? " Intake form sent to the client."
+        : "";
     await Promise.all([
-      say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.`),
+      say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.${link}`),
+      msg.channel === "voice" && packet?.formUrl &&
+        reply(msg.from, `Quick intake form before your visit: ${packet.formUrl}`),
       !isContractor(msg.from) &&
-        tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.`),
+        tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.${paperwork}`),
     ]);
   }
 
