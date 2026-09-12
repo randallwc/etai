@@ -171,17 +171,25 @@ function createCalendar({ ambi, env = process.env } = {}) {
   };
 }
 
+/**
+ * In-memory calendar with the same surface as the Ambiguous adapter.
+ * Used as the offline fallback in createCalendar and by all bus tests.
+ * apply() runs a batch of creates/updates/deletes in one call.
+ */
 function stubCalendar(tz = "UTC") {
   const events = [];
-  return {
+  function overlapsDay(e, date) {
+    const [a, b] = dayBounds(date, tz);
+    return e.start < b && e.end > a;
+  }
+  const api = {
     stub: true,
+    events,
     async listDay({ date }) {
-      return events
-        .filter((e) => String(e.start).startsWith(date))
-        .map(normEvent);
+      return events.filter((e) => overlapsDay(e, date)).map(normEvent);
     },
     async proposeSlots({ date, durationMinutes = 60, count = 3, timePref = null }) {
-      const busy = events.filter((e) => String(e.start).startsWith(date));
+      const busy = events.filter((e) => e.status !== "canceled" && overlapsDay(e, date));
       return findSlots(busy, date, durationMinutes, count, timePref, tz);
     },
     async createEvent({ title, start, end, description }) {
@@ -196,11 +204,14 @@ function stubCalendar(tz = "UTC") {
       events.push(ev);
       return ev;
     },
-    async updateEvent({ eventId, start, end }) {
+    async updateEvent({ eventId, title, start, end, description, status }) {
       const ev = events.find((e) => e.id === eventId);
       if (ev) {
+        if (title !== undefined) ev.title = title;
         if (start) ev.start = new Date(start).toISOString();
         if (end) ev.end = new Date(end).toISOString();
+        if (description !== undefined) ev.description = description;
+        if (status !== undefined) ev.status = status;
       }
       return ev ?? { id: eventId };
     },
@@ -208,7 +219,18 @@ function stubCalendar(tz = "UTC") {
       const i = events.findIndex((e) => e.id === eventId);
       return i >= 0 ? events.splice(i, 1)[0] : { id: eventId, status: "canceled" };
     },
+    async apply(ops = []) {
+      const results = [];
+      for (const op of ops) {
+        if (op.op === "create") results.push(await api.createEvent(op));
+        else if (op.op === "update") results.push(await api.updateEvent(op));
+        else if (op.op === "delete" || op.op === "cancel") results.push(await api.cancelEvent(op));
+        else results.push({ error: `unknown op ${op.op}` });
+      }
+      return results;
+    },
   };
+  return api;
 }
 
 module.exports = { createCalendar, stubCalendar, resolveDayRef, partsInTz, findSlots };

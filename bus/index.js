@@ -50,9 +50,11 @@ function createBusServer(env = process.env, overrides = {}) {
     });
   }
 
+  const KIND_LABEL = { created: "New on calendar", updated: "Calendar change", deleted: "Canceled" };
+
   async function notifyContractor(n) {
-    const label = n.kind === "reminder" ? "Reminder" : `Calendar ${n.kind ?? "update"}`;
-    const text = `${label}: ${n.title} at ${fmtWhen(n.startAt ?? n.triggerAt)}`;
+    const label = n.kind === "reminder" ? "Reminder" : (KIND_LABEL[n.kind] ?? `Calendar ${n.kind ?? "update"}`);
+    const text = `${label}: ${n.title} at ${fmtWhen(n.startAt ?? n.triggerAt)}${n.actor ? ` (by ${n.actor})` : ""}`;
     if (!contractorPhone) return console.log(`[bus] ${text} (CONTRACT_PHONE unset)`);
     await notify({ to: contractorPhone, body: text });
   }
@@ -114,14 +116,19 @@ function createBusServer(env = process.env, overrides = {}) {
       return;
     }
     if (path === "/webhooks/calendar") {
-      if (typeof body.id !== "string" || !body.id || typeof body.title !== "string" || !body.title) {
+      const ev = body?.data && typeof body.data === "object" ? body.data : (body ?? {});
+      const kind = /^event\.(\w+)$/.exec(body?.type ?? "")?.[1] ?? body?.kind;
+      const title = ev.title ?? ev.summary ?? body?.summary;
+      const startAt = ev.start_at ?? ev.startAt ?? ev.start ?? ev.window?.start ?? body?.startAt ?? body?.triggerAt;
+      const dedupId = typeof body?.id === "string" && body.id ? body.id : `${ev.id}:${kind}:${startAt}`;
+      if (!dedupId || typeof title !== "string" || !title) {
         return replyJson(res, 400, { error: { code: "invalid", message: "id and title required" } });
       }
-      if (!store.dedup(`cal:${body.id}`)) {
+      if (!store.dedup(`cal:${dedupId}`)) {
         return replyJson(res, 202, { accepted: false, duplicate: true });
       }
       replyJson(res, 202, { accepted: true });
-      notifyContractor(body).catch((e) => console.error(`[bus] calendar notify failed: ${e.message}`));
+      notifyContractor({ kind, title, startAt, actor: body?.actor?.name }).catch((e) => console.error(`[bus] calendar notify failed: ${e.message}`));
       return;
     }
     if (path === "/voice/turn") {
@@ -167,18 +174,26 @@ function createBusServer(env = process.env, overrides = {}) {
     });
   });
 
-  async function subscribe() {
+  async function subscribeOnce() {
     const publicUrl = env.PUBLIC_URL?.replace(/\/$/, "");
-    if (!messagingUrl || !publicUrl) return;
-    const url = `${publicUrl}/webhooks/inbound`;
-    await fetch(`${messagingUrl}/subscriptions`, {
+    if (!messagingUrl || !publicUrl) return false;
+    const res = await fetch(`${messagingUrl}/subscriptions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url }),
-    }).catch((e) => console.error(`subscribe failed: ${e.message}`));
+      body: JSON.stringify({ url: `${publicUrl}/webhooks/inbound` }),
+    }).catch(() => null);
+    return Boolean(res?.ok);
   }
 
-  return { server, loop, store, notify, subscribe, calendar };
+  async function subscribe() {
+    for (let i = 0; i < 5; i++) {
+      if (await subscribeOnce()) return;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    console.error("subscribe failed after retries");
+  }
+
+  return { server, loop, store, notify, subscribe, subscribeOnce, calendar };
 }
 
 if (require.main === module) {
@@ -188,10 +203,11 @@ if (require.main === module) {
     STATE_FILE: process.env.STATE_FILE ?? join(__dirname, ".state.json"),
   };
   const port = Number(env.PORT ?? 4010);
-  const { server, store, notify, subscribe } = createBusServer(env);
+  const { server, store, notify, subscribe, subscribeOnce } = createBusServer(env);
   server.listen(port, async () => {
     console.log(`bus listening on :${port}`);
     await subscribe();
+    setInterval(subscribeOnce, 30_000).unref();
   });
   startReminders({
     store,

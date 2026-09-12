@@ -38,6 +38,7 @@ const GATEWAY_DOMAINS = new Set([
   "msg.fi.google.com",
   "mms.cricketwireless.net",
   "mymetropcs.com",
+  "sms.myboostmobile.com",
 ]);
 
 function phoneFromAddress(email, extraDomains = []) {
@@ -106,7 +107,7 @@ function fromSim({ from, body, channel = "imessage" }) {
   };
 }
 
-const GATEWAY_HOSTS = /vtext\.com|txt\.att\.net|tmomail\.net|messaging\.sprintpcs\.com|mms\.cricketwireless\.net|vmobl\.com/i;
+const GATEWAY_HOSTS = /vtext\.com|vzwpix\.com|txt\.att\.net|tmomail\.net|messaging\.sprintpcs\.com|mms\.cricketwireless\.net|vmobl\.com/i;
 
 function phoneFromEmail(addr) {
   const m = String(addr ?? "").match(/([0-9]{7,15})@/);
@@ -120,10 +121,11 @@ function fromAmbiguousMail(event) {
   if (type && !/email|mail|message/i.test(type)) return null;
   const d = event?.data ?? event?.mail ?? event ?? {};
   const fromAddr =
-    d.from?.email ?? d.from?.address ?? d.from ?? d.sender?.email ?? d.sender;
+    d.from?.email ?? d.from?.address ?? d.from ?? d.senderEmail ?? d.sender?.email ?? d.sender;
   const from = phoneFromEmail(typeof fromAddr === "string" ? fromAddr : fromAddr?.email);
   if (!from) return null;
-  const body = d.body_text ?? d.text ?? d.snippet ?? d.body ?? d.subject;
+  const body = d.body_text ?? d.text ?? d.snippet ?? d.body ?? d.bodyFull ?? d.bodyPreview ?? d.subject;
+  if (/^\(no content\)$/i.test(body ?? "")) return null;
   if (!body || typeof body !== "string") return null;
   return {
     channel: "sms",

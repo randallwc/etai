@@ -1,6 +1,6 @@
 const { partsInTz } = require("./calendar.js");
 
-const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "other"];
+const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "clarify", "other"];
 
 function extractJson(text) {
   const i = text.indexOf("{");
@@ -13,11 +13,30 @@ function extractJson(text) {
   }
 }
 
-function prompt(text, todayLabel) {
+function contextLines(ctx) {
+  if (!ctx) return [];
+  const lines = [];
+  if (ctx.role) lines.push(`Texter role: ${ctx.role}.`);
+  if (ctx.customer?.name) lines.push(`Texter name: ${ctx.customer.name}.`);
+  if (ctx.jobs?.length) {
+    lines.push("Their active jobs: " + ctx.jobs.map((j) => `${j.id} "${j.description ?? j.title}" at ${j.window?.start ?? j.startAt}`).join("; "));
+  }
+  if (ctx.pending) {
+    lines.push(
+      `A ${ctx.pending.mode} proposal is pending: ${ctx.pending.slots.map((s, i) => `${i + 1}) ${s.start}`).join("  ")}`
+    );
+  }
+  if (ctx.history?.length) {
+    lines.push("Recent thread:", ...ctx.history.map((h) => `${h.role}: ${h.body}`));
+  }
+  return lines.length ? ["Context:", ...lines] : [];
+}
+
+function prompt(text, todayLabel, ctx) {
   return [
     "You are the intent extractor for a contractor's scheduling assistant that works over SMS.",
     "Return ONLY raw JSON matching this shape, no markdown, no prose:",
-    '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","slotChoice":0}',
+    '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|clarify|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","jobRef":"","question":"","say":"","slotChoice":0}',
     "Use null for any field that is absent. Rules:",
     '- "running N late", "behind", "stuck in traffic" -> running_late, delayMinutes=N',
     "- asking about today's or a day's schedule -> day_summary",
@@ -26,7 +45,11 @@ function prompt(text, todayLabel) {
     "- wants to cancel -> cancel",
     '- client asking "where are you", ETA, when arriving, how far out -> eta',
     '- picking an offered option ("the first one", "2", "2pm works") -> book with slotChoice set',
+    '- references an existing job ("the sprinkler one", "my 2pm") -> set jobRef to its id, title fragment, or time',
+    "- compound requests (cancel AND rebook) or not enough info to act -> clarify with a short question",
+    "- for clarify and other, draft the reply in say (one or two SMS sentences; never promise an action the intent does not perform)",
     "- anything else -> other",
+    ...contextLines(ctx),
     `Today is ${todayLabel}.`,
     `Text: ${JSON.stringify(text)}`,
   ].join("\n");
@@ -64,6 +87,9 @@ function normalize(raw) {
     delayMinutes: Number.isInteger(raw.delayMinutes) && raw.delayMinutes > 0 ? raw.delayMinutes : null,
     name: typeof raw.name === "string" && raw.name ? raw.name : null,
     description: typeof raw.description === "string" && raw.description ? raw.description : null,
+    jobRef: typeof raw.jobRef === "string" && raw.jobRef ? raw.jobRef : null,
+    question: typeof raw.question === "string" && raw.question ? raw.question : null,
+    say: typeof raw.say === "string" && raw.say ? raw.say : null,
     slotChoice: Number.isInteger(raw.slotChoice) && raw.slotChoice > 0 ? raw.slotChoice : null,
   };
 }
@@ -74,17 +100,28 @@ function normalize(raw) {
  * (prompt) => assistant response body function; injectable for tests.
  * Falls back to {intent:"other"} on any failure -- never throws.
  */
+const FAST_INTENTS = new Set(["day_summary", "running_late", "eta"]);
+
 function createAi({ chat, env = process.env, now = () => new Date() }) {
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
-  async function classify(text) {
+  const classifyTimeoutMs = Number(env.AI_CLASSIFY_TIMEOUT_MS) || 15000;
+  async function classify(text, ctx) {
+    const fast = fallbackClassify(text);
+    if (FAST_INTENTS.has(fast.intent)) return fast;
     try {
       const p = partsInTz(tz, now());
       const today = `${p.weekday} ${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
-      const res = await chat(prompt(text, today));
+      let timer;
+      const res = await Promise.race([
+        chat(prompt(text, today, ctx)),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("classify timeout")), classifyTimeoutMs);
+        }),
+      ]).finally(() => clearTimeout(timer));
       const parsed = extractJson(res?.response ?? "");
-      return parsed ? normalize(parsed) : fallbackClassify(text);
+      return parsed ? normalize(parsed) : fast;
     } catch {
-      return fallbackClassify(text);
+      return fast;
     }
   }
   return { classify, extractJson, fallbackClassify };

@@ -33,31 +33,57 @@ function ambimail(env) {
   const base = (env.AMBIGUOUS_BASE_URL ?? "https://app.ambiguous.ai").replace(/\/$/, "");
   const key = env.AMBIG_API ?? env.AMBIGUOUS_API_KEY;
   const gateway = env.CARRIER_GATEWAY ?? "vtext.com";
+  const map = Object.fromEntries(
+    (env.GATEWAY_MAP ?? "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean)
+      .map((e) => {
+        const [num, domains] = e.split(":");
+        const key10 = num.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+        return [key10, domains.split("+").map((d) => d.trim()).filter(Boolean)];
+      })
+  );
   return {
     name: "ambimail",
     async send({ to, body }) {
       const digits = to.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
-      const res = await fetch(`${base}/api/mail/send`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          to: [`${digits}@${gateway}`],
-          subject: "ETAi",
-          body_markdown: body,
-          body_text: body,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      const domains = map[digits] ?? [gateway];
+      const results = await Promise.allSettled(
+        domains.map(async (d) => {
+          let res;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            res = await fetch(`${base}/api/mail/send`, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                authorization: `Bearer ${key}`,
+              },
+              body: JSON.stringify({
+                to: [`${digits}@${d}`],
+                subject: "ETAi",
+                body_markdown: body,
+                body_text: body,
+              }),
+            }).catch(() => null);
+            if (res && (res.ok || res.status < 500)) break;
+            if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+          }
+          const data = res ? await res.json().catch(() => ({})) : {};
+          if (!res?.ok) {
+            throw new Error(`${d}: ${res?.status ?? "unreachable"} ${data?.error ?? "unknown"}`);
+          }
+          return data?.id;
+        })
+      );
+      const ok = results.find((r) => r.status === "fulfilled");
+      if (!ok) {
         throw Object.assign(
-          new Error(`ambimail responded ${res.status}: ${data?.error ?? "unknown"}`),
+          new Error(`ambimail failed: ${results[0]?.reason?.message ?? "unknown"}`),
           { status: 502 },
         );
       }
-      return { externalId: data?.id ?? `ambimail-${randomUUID()}` };
+      return { externalId: ok.value ?? `ambimail-${randomUUID()}` };
     },
   };
 }

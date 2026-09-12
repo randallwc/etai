@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const { test, before, after, describe } = require("node:test");
 const { createMessagingServer } = require("../index.js");
 const { createMailPoller } = require("../mailpoller.js");
@@ -94,14 +95,28 @@ describe("poller integration", () => {
 
   test("pollOnce fans out normalized mail and marks it read", async () => {
     inbox.push({ ...mailItem });
+    const http = require("node:http");
+    const upstream = http.createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(202, { "content-type": "application/json" });
+        res.end("{}");
+      });
+    });
+    await new Promise((r) => upstream.listen(0, "127.0.0.1", r));
     const { mailPoller, recent } = createMessagingServer({
       AMBIG_API: "ak_test",
       MAIL_POLL_SECONDS: "3600",
+      UPSTREAM_URL: `http://127.0.0.1:${upstream.address().port}`,
     });
     assert.ok(mailPoller);
-    await mailPoller.pollOnce();
-    await mailPoller.pollOnce();
-    mailPoller.stop();
+    try {
+      await mailPoller.pollOnce();
+      await mailPoller.pollOnce();
+    } finally {
+      mailPoller.stop();
+      upstream.close();
+    }
 
     assert.equal(recent.length, 1);
     assert.equal(recent[0].channel, "sms");
@@ -109,6 +124,33 @@ describe("poller integration", () => {
     assert.equal(recent[0].externalId, `ambmail-${mailItem.id}`);
     assert.ok(patched.length >= 1);
     assert.ok(patched[0].includes(`/api/mail/${mailItem.id}`));
+  });
+
+  test("pollOnce leaves mail unread when no subscriber accepts it", async () => {
+    inbox.length = 0;
+    inbox.push({ ...mailItem, id: "undeliverable-mail" });
+    const before = patched.length;
+    const poller = createMailPoller(
+      { AMBIG_API: "ak_test", MAIL_POLL_SECONDS: "3600" },
+      async () => null,
+    );
+    const emitted = await poller.pollOnce();
+    assert.equal(emitted, 0);
+    assert.equal(patched.length, before);
+  });
+
+  test("pollOnce marks a redelivered duplicate read without re-emitting", async () => {
+    inbox.length = 0;
+    inbox.push({ ...mailItem, id: "dup-mail" });
+    let calls = 0;
+    const poller = createMailPoller(
+      { AMBIG_API: "ak_test", MAIL_POLL_SECONDS: "3600" },
+      async (m) => (calls++, { message: m, duplicate: true }),
+    );
+    const emitted = await poller.pollOnce();
+    assert.equal(emitted, 0);
+    assert.equal(calls, 1);
+    assert.ok(patched.some((u) => u.includes("/api/mail/dup-mail")));
   });
 
   test("pollOnce skips already-read and non-gateway mail", async () => {

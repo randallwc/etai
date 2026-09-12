@@ -44,7 +44,7 @@ async function waitForReplies(n) {
 }
 
 before(async () => {
-  ({ server } = createBusServer({}, {
+  ({ server } = createBusServer({ CONTRACT_PHONE: "+15550999999" }, {
     ai: { classify: async (b) => fakeIntent(b) },
     notify: async ({ to, body }) => {
       sent.push({ to, body });
@@ -71,21 +71,31 @@ test("helpers: resolveDayRef, parseChoice, extractJson", () => {
   assert.equal(extractJson("no json"), null);
 });
 
+const lastTo = (to) => sent.filter((m) => m.to === to).at(-1);
+
 test("book -> pick a slot -> locked in", async () => {
   const before = sent.length;
   await inbound("b1", "need sprinklers fixed Thursday");
   await waitForReplies(before + 1);
-  assert.match(sent.at(-1).body, /reply with a number/i);
+  assert.match(lastTo("+15551234567").body, /reply with a number/i);
   await inbound("b2", "1");
-  await waitForReplies(before + 2);
-  assert.match(sent.at(-1).body, /locked in/i);
+  await waitForReplies(before + 3);
+  assert.match(lastTo("+15551234567").body, /locked in/i);
+  assert.match(lastTo("+15550999999").body, /new booking/i);
 });
 
 test("day summary answers with the route", async () => {
   const before = sent.length;
-  await inbound("d1", "what's my day");
+  await inbound("d1", "what's my day", "+15550999999");
   await waitForReplies(before + 1);
-  assert.match(sent.at(-1).body, /calendar|route|nothing/i);
+  assert.match(lastTo("+15550999999").body, /route|nothing/i);
+});
+
+test("client day summary answers with their booking", async () => {
+  const before = sent.length;
+  await inbound("d2", "what's my day", "+15551234567");
+  await waitForReplies(before + 1);
+  assert.match(lastTo("+15551234567").body, /sprinkler|nothing|booked/i);
 });
 
 test("duplicate externalId is processed once", async () => {
@@ -100,5 +110,5 @@ test("unknown message gets a help reply", async () => {
   const before = sent.length;
   await inbound("u1", "zzz");
   await waitForReplies(before + 1);
-  assert.match(sent.at(-1).body, /what do you need/i);
+  assert.match(lastTo("+15551234567").body, /what do you need/i);
 });
