@@ -28,6 +28,20 @@ describe("seedBoard", () => {
     board.jobs[0].status = "canceled";
     expect(seedBoard().jobs[0].status).not.toBe("canceled");
   });
+
+  it("anchors the earliest active job to today", () => {
+    const starts = seedBoard()
+      .jobs.filter((j) => j.status !== "done" && j.status !== "canceled")
+      .map((j) => new Date(j.window.start));
+    expect(new Date(Math.min(...starts)).toDateString()).toBe(
+      new Date().toDateString()
+    );
+  });
+
+  it("seeds at most one en_route job", () => {
+    const n = seedBoard().jobs.filter((j) => j.status === "en_route").length;
+    expect(n).toBeLessThanOrEqual(1);
+  });
 });
 
 describe("loadBoard and saveBoard", () => {
@@ -42,7 +56,7 @@ describe("loadBoard and saveBoard", () => {
   });
 
   it("falls back to the seed on corrupt JSON", () => {
-    localStorage.setItem("etai.board.v2", "{not json");
+    localStorage.setItem("etai.board.v3", "{not json");
     expect(loadBoard()).toEqual(seedBoard());
   });
 
@@ -81,5 +95,16 @@ describe("transition", () => {
   it("returns the same board on an unknown jobId", () => {
     const board = seedBoard();
     expect(transition(board, "job_nope", "depart")).toBe(board);
+  });
+
+  it("demotes the other en_route job when a second job departs", () => {
+    let board = seedBoard();
+    const enRoute = board.jobs.find((j) => j.status === "en_route");
+    const next = board.jobs.find((j) => j.status === "confirmed");
+    board = transition(board, next.id, "depart");
+    expect(board.jobs.find((j) => j.id === next.id).status).toBe("en_route");
+    expect(board.jobs.find((j) => j.id === enRoute.id).status).toBe(
+      "confirmed"
+    );
   });
 });

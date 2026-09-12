@@ -193,6 +193,7 @@ function plainReply(text) {
   return text
     .replace(/(\*\*|__)([\s\S]*?)\1/g, "$2")
     .replace(/([*_`])([\s\S]*?)\1/g, "$2")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/^[ \t]*(?:[-*•]|\d{1,2}[.)])[ \t]+/gm, "")
     .replace(/^#{1,6}[ \t]+/gm, "")
     .replace(/\s-\s(?=["'])/g, " ")
