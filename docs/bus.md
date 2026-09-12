@@ -22,6 +22,9 @@ MODULES
                 and extracts it with a tolerant parser. A failed or
                 unparseable response falls back to keyword classification
                 (fallbackClassify), so the loop works without a key.
+  prompts.js    The per-channel system prompt lines for classification:
+                sms, imessage, voice. classify(text, channel) renders the
+                matching block; unknown channels get the SMS profile.
   calendar.js   The calendar framework: listDay, proposeSlots,
                 createEvent, updateEvent, cancelEvent, plus timezone
                 helpers (resolveDayRef, partsInTz, findSlots). With no

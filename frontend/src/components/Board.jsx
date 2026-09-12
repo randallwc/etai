@@ -1,5 +1,21 @@
 const RESOLVED = new Set(["done", "canceled"]);
 
+const dayKey = (d) => {
+  const date = new Date(d);
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${m}-${day}`;
+};
+
+const fmtDay = (key) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+};
+
 export function fmtWindow(w) {
   if (!w?.start) return "";
   const day = new Date(w.start).toLocaleDateString(undefined, {
@@ -49,6 +65,27 @@ export default function Board({
   const active = sorted.filter((j) => !RESOLVED.has(j.status));
   const resolved = sorted.filter((j) => RESOLVED.has(j.status));
 
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const groups = new Map();
+  for (const job of active) {
+    const key = dayKey(job.window.start);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(job);
+  }
+  const sections = [...groups.entries()].sort(([a], [b]) =>
+    a.localeCompare(b)
+  );
+  for (const [, jobs] of sections)
+    jobs.sort((a, b) => (b.status === "en_route") - (a.status === "en_route"));
+
+  const label = (key) =>
+    key === dayKey(new Date())
+      ? "Customers today"
+      : key === dayKey(tomorrow)
+        ? "Customers tomorrow"
+        : `Customers · ${fmtDay(key)}`;
+
   const row = (j) => (
     <JobRow
       key={j.id}
@@ -75,8 +112,12 @@ export default function Board({
         </button>
       ))}
 
-      <div className="side-label">Customers</div>
-      {active.map(row)}
+      {sections.map(([key, jobs]) => (
+        <div key={key}>
+          <div className="side-label">{label(key)}</div>
+          {jobs.map(row)}
+        </div>
+      ))}
       {resolved.length > 0 && (
         <details className="resolved">
           <summary>Resolved · {resolved.length}</summary>
