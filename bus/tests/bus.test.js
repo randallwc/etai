@@ -66,6 +66,7 @@ before(async () => {
     AMBIGUOUS_BASE_URL: `http://127.0.0.1:${calendar.address().port}`,
     AMBIGUOUS_API_KEY: "ak_test",
     MESSAGING_URL: `http://127.0.0.1:${messaging.address().port}`,
+    CONTRACT_PHONE: "+15550001111",
   }).server;
   await new Promise((r) => bus.listen(0, r));
   base = `http://127.0.0.1:${bus.address().port}`;
@@ -133,4 +134,32 @@ test("healthz reports wiring", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.calendar, true);
   assert.match(body.messaging, /^http:\/\/127\.0\.0\.1/);
+});
+
+test("calendar notification texts the contractor once", async () => {
+  const note = {
+    id: `cal-${Math.random()}`,
+    kind: "reminder",
+    eventId: "e1",
+    title: "Sprinkler repair",
+    startAt: "2026-09-13T22:00:00Z",
+    triggerAt: "2026-09-13T21:50:00Z",
+    detectedAt: new Date().toISOString(),
+  };
+  const res = await post(`${base}/webhooks/calendar`, note);
+  assert.equal(res.status, 202);
+  const before = sends.length;
+  await waitFor(() => sends.length === before + 1);
+  assert.equal(sends.at(-1).to, "+15550001111");
+  assert.match(sends.at(-1).body, /Reminder: Sprinkler repair at \d/);
+
+  const again = await post(`${base}/webhooks/calendar`, note);
+  assert.equal((await again.json()).accepted, false);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(sends.length, before + 1);
+});
+
+test("malformed calendar notification is 400", async () => {
+  assert.equal((await post(`${base}/webhooks/calendar`, { kind: "reminder" })).status, 400);
+  assert.equal((await post(`${base}/webhooks/calendar`, "not json")).status, 400);
 });
