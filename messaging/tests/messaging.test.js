@@ -103,3 +103,31 @@ test("bluebubbles dedups, ignores own sends and non-message events", async () =>
   await post(`${base}/webhooks/bluebubbles`, { type: "typing-indicator", data: {} });
   assert.equal(received.length, before);
 });
+
+test("ambimail email.received normalizes gateway sender and fans out", async () => {
+  const res = await post(`${base}/webhooks/ambimail`, {
+    type: "email.received",
+    data: {
+      id: "mail-9",
+      from: { email: "4253625633@vtext.com" },
+      body_text: "yes 2 works",
+      created_at: "2026-09-12T20:00:00Z",
+    },
+  });
+  assert.equal(res.status, 202);
+  assert.equal((await res.json()).accepted, true);
+  const msg = received.at(-1);
+  assert.equal(msg.channel, "sms");
+  assert.equal(msg.from, "+14253625633");
+  assert.equal(msg.body, "yes 2 works");
+});
+
+test("ambimail rejects non-gateway senders and non-mail events", async () => {
+  const before = received.length;
+  await post(`${base}/webhooks/ambimail`, {
+    type: "email.received",
+    data: { id: "m2", from: { email: "someone@gmail.com" }, body_text: "hi" },
+  });
+  await post(`${base}/webhooks/ambimail`, { type: "webhook.test", data: { test: true } });
+  assert.equal(received.length, before);
+});
