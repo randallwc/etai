@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DispatchBoard",
+  "description": "The dispatcher console's whole state: one contractor, their customers, and the jobs between them. Persisted by the frontend under localStorage key etai.board. Field names inline the shapes from customer.schema.json, job.schema.json, and contractor.schema.json.",
+  "type": "object",
+  "required": ["contractor", "customers", "jobs"],
+  "properties": {
+    "contractor": {
+      "type": "object",
+      "required": ["id", "name", "phone", "ambiguousUserId"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "trade": { "type": "string" },
+        "phone": { "type": "string", "pattern": "^\\+[1-9]\\d{6,14}$" },
+        "ambiguousUserId": { "type": "string", "minLength": 1 },
+        "workingHours": {
+          "type": "object",
+          "required": ["start", "end"],
+          "properties": {
+            "start": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" },
+            "end": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" },
+            "timezone": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "homeBaseAddress": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "customers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "phone"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": ["string", "null"] },
+          "phone": { "type": "string", "pattern": "^\\+[1-9]\\d{6,14}$" },
+          "address": { "type": ["string", "null"] },
+          "ambiguousCrmId": { "type": ["string", "null"] },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "customerId", "contractorId", "status", "window", "description", "source"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "customerId": { "type": "string", "minLength": 1 },
+          "contractorId": { "type": "string", "minLength": 1 },
+          "ambiguousEventId": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["requested", "confirmed", "en_route", "done", "canceled"] },
+          "window": {
+            "type": "object",
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            },
+            "additionalProperties": false
+          },
+          "address": { "type": "string" },
+          "description": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "enum": ["message", "call"] },
+          "eta": { "type": ["string", "null"], "format": "date-time" },
+          "remindedAt": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
