@@ -229,6 +229,39 @@
       .close-layout .lede { max-width: 850px; }
       .close-layout strong { color: #9fbcff; }
 
+      .team-layout {
+        display: grid;
+        height: 100%;
+        align-content: center;
+      }
+      .team-layout h2 { margin-bottom: 46px; }
+      .team-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: clamp(18px, 3vw, 48px);
+      }
+      .team-member { text-align: center; }
+      .team-member img {
+        display: block;
+        width: min(100%, 184px);
+        aspect-ratio: 1;
+        margin: 0 auto 18px;
+        border: 5px solid #d5e1ff;
+        border-radius: 50%;
+        object-fit: cover;
+        object-position: center;
+        background: #e7e8ed;
+      }
+      .team-member a {
+        color: inherit;
+        font-size: clamp(18px, 1.75vw, 26px);
+        font-weight: 800;
+        letter-spacing: -.035em;
+        text-decoration: none;
+      }
+      .team-member a:hover, .team-member a:focus-visible { color: var(--blue); text-decoration: underline; }
+      .team-member p { margin: 5px 0 0; color: var(--muted); font-size: clamp(13px, 1.25vw, 18px); }
+
       .controls {
         position: fixed;
         z-index: 5;
@@ -261,12 +294,13 @@
         .flow-node { min-height: 0; }
         .criteria { grid-template-columns: 1fr; }
         .criteria-item { min-height: 0; }
+        .team-grid { grid-template-columns: repeat(2, 1fr); }
       }
     </style>
   </head>
   <body>
     <main class="deck" aria-live="polite">
-      <section class="slide dark active" aria-label="Slide 1 of 8">
+      <section class="slide dark active" aria-label="Slide 1 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="cover-layout">
           <p class="eyebrow">Hackathon demo</p>
@@ -277,7 +311,7 @@
         <p class="caption">Use ← → keys or the controls to navigate</p>
       </section>
 
-      <section class="slide" aria-label="Slide 2 of 8">
+      <section class="slide" aria-label="Slide 2 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="two-column">
           <div class="problem-side warm">
@@ -296,7 +330,7 @@
         <p class="caption">The interface problem: both sides already reach for their phone</p>
       </section>
 
-      <section class="slide" aria-label="Slide 3 of 8">
+      <section class="slide" aria-label="Slide 3 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
           <div>
@@ -322,7 +356,7 @@
         </div>
       </section>
 
-      <section class="slide" aria-label="Slide 4 of 8">
+      <section class="slide" aria-label="Slide 4 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
           <div class="phone" aria-label="Example electrician delay confirmation">
@@ -341,7 +375,7 @@
         </div>
       </section>
 
-      <section class="slide" aria-label="Slide 5 of 8">
+      <section class="slide" aria-label="Slide 5 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <p class="eyebrow">Why this environment matters</p>
         <h2>Phone calls and texts are where the scheduling problem already happens.</h2>
@@ -358,7 +392,7 @@
         <div class="callout"><p>ETAi uses the phone as the product surface and Ambiguous as the shared calendar system of record.</p></div>
       </section>
 
-      <section class="slide" aria-label="Slide 6 of 8">
+      <section class="slide" aria-label="Slide 6 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <p class="eyebrow">Technical credibility</p>
         <h2>One scheduling brain connects messages to the Ambiguous calendar.</h2>
@@ -374,7 +408,7 @@
         <p class="flow-detail">Replies travel back through the messaging layer. Availability is checked before ETAi proposes a time. ETAi records a confirmed appointment only after the client selects a slot.</p>
       </section>
 
-      <section class="slide" aria-label="Slide 7 of 8">
+      <section class="slide" aria-label="Slide 7 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <p class="eyebrow">What judges can see</p>
         <h2>The demo maps directly to the evaluation criteria.</h2>
@@ -386,7 +420,7 @@
         </div>
       </section>
 
-      <section class="slide dark" aria-label="Slide 8 of 8">
+      <section class="slide dark" aria-label="Slide 8 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="close-layout">
           <p class="eyebrow">Outcome</p>
@@ -395,11 +429,42 @@
         </div>
         <p class="caption">ETAi Hackathon Demo</p>
       </section>
+
+      <section class="slide" aria-label="Slide 9 of 9">
+        <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
+        <div class="team-layout">
+          <p class="eyebrow">The team</p>
+          <h2>Built by the ETAi team</h2>
+          <div class="team-grid">
+            <article class="team-member">
+              <img src="https://media.licdn.com/dms/image/v2/C4D03AQFMpABtFl1OZQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1649371457756?e=1790812800&amp;v=beta&amp;t=cjnPn2eN1ktTVAcRS5oYBGsTOuWmYCm9GTBbuNWiR4w" alt="Faisal Aljishi">
+              <a href="https://www.linkedin.com/in/faisal-aljishi" target="_blank" rel="noreferrer">Faisal Aljishi</a>
+              <p>LinkedIn</p>
+            </article>
+            <article class="team-member">
+              <img src="https://media.licdn.com/dms/image/v2/C4E03AQGv5vZ9GL2x6A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1644212161283?e=1790812800&amp;v=beta&amp;t=lKM_KbqWu7NfBcikNhwwauF0K8zHnx3bhuTDn95ZbR4" alt="Albin Shrestha">
+              <a href="https://www.linkedin.com/in/albin-shrestha" target="_blank" rel="noreferrer">Albin Shrestha</a>
+              <p>LinkedIn</p>
+            </article>
+            <article class="team-member">
+              <img src="https://media.licdn.com/dms/image/v2/C5603AQEcbG4_vU_DAg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1652567334853?e=1790812800&amp;v=beta&amp;t=TrsdoZCbuNs4HKl40PufVRgajBTQbjIDnyr7b5ODmbI" alt="Sai Yerra">
+              <a href="https://www.linkedin.com/in/saiyerra" target="_blank" rel="noreferrer">Sai Yerra</a>
+              <p>LinkedIn</p>
+            </article>
+            <article class="team-member">
+              <img src="https://media.licdn.com/dms/image/v2/D5603AQGAJ5EKJOfknA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1711096706253?e=1790812800&amp;v=beta&amp;t=SRWQoJgchmxfAwMx-V8zTjiDF0xEoD-ndl_nACMiVvs" alt="William C. Randall">
+              <a href="https://www.linkedin.com/in/william-c-randall" target="_blank" rel="noreferrer">William C. Randall</a>
+              <p>LinkedIn</p>
+            </article>
+          </div>
+        </div>
+        <p class="caption">Thank you</p>
+      </section>
     </main>
 
     <nav class="controls" aria-label="Presentation navigation">
       <button type="button" id="previous" aria-label="Previous slide">‹</button>
-      <span id="status" aria-live="polite">1 / 8</span>
+      <span id="status" aria-live="polite">1 / 9</span>
       <button type="button" id="next" aria-label="Next slide">›</button>
     </nav>
 
