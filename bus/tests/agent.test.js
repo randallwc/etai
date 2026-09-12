@@ -98,6 +98,17 @@ test("client day summary answers with their booking", async () => {
   assert.match(lastTo("+15551234567").body, /sprinkler|nothing|booked/i);
 });
 
+test("back-to-back texts on one thread are processed in order", async () => {
+  const before = sent.length;
+  await inbound("r1", "need gutters cleaned tomorrow");
+  await inbound("r2", "1");
+  for (let i = 0; i < 60; i++) {
+    if (/locked in/i.test(lastTo("+15551234567")?.body ?? "")) break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  assert.match(lastTo("+15551234567").body, /locked in/i);
+});
+
 test("duplicate externalId is processed once", async () => {
   const before = sent.length;
   await inbound("dup-1", "what's my day");

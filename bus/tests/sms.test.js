@@ -9,11 +9,12 @@ const CLIENT = "+14253625633";
 const CLIENT_GATEWAY = "4253625633@vtext.com";
 const CONTRACTOR_GATEWAY = "5550001111@vtext.com";
 
-let ambiguous, smsMessaging, smsBus, simMessaging, simBus, mailPoller;
+let ambiguous, smsMessaging, smsBus, simMessaging, simBus, mailPoller, smsCal;
 let smsMsgBase, simMsgBase;
 const mailOut = [];
 const patchedMail = [];
 const eventWrites = [];
+const remoteEvents = [];
 const inbox = [];
 
 function post(url, body) {
@@ -69,13 +70,18 @@ before(async () => {
       } else if (path === "/api/calendars/availability") {
         payload = { availability: { "u-1": [] } };
       } else if (path === "/api/calendars/events" && req.method === "GET") {
-        payload = { data: [] };
+        payload = { data: remoteEvents };
       } else if (path === "/api/calendars/cal-1/events" && req.method === "POST") {
         eventWrites.push({ method: "POST", body });
-        payload = { event: { id: `ev-${eventWrites.length}`, ...body } };
+        remoteEvents.push({ id: `ev-${eventWrites.length}`, ...body });
+        payload = { event: remoteEvents.at(-1) };
       } else if (path.startsWith("/api/calendars/events/")) {
         eventWrites.push({ method: req.method, path });
-        payload = { event: { id: path.split("/").pop() } };
+        const rid = path.split("/").pop();
+        const i = remoteEvents.findIndex((e) => e.id === rid);
+        if (req.method === "DELETE" && i >= 0) remoteEvents.splice(i, 1);
+        else if (req.method === "PATCH" && i >= 0) Object.assign(remoteEvents[i], body);
+        payload = { event: remoteEvents[i] ?? { id: rid } };
       } else if (path === "/api/crm/contacts" && req.method === "POST") {
         payload = { contact: { id: "crm-1", ...body } };
       } else if (path === "/api/crm/contacts") {
@@ -103,7 +109,7 @@ before(async () => {
   }));
   smsMsgBase = await listen(smsMessaging);
 
-  ({ server: smsBus } = createBusServer({
+  ({ server: smsBus, calendar: smsCal } = createBusServer({
     AMBIGUOUS_BASE_URL: ambiBase,
     AMBIGUOUS_API_KEY: "ak_test",
     MESSAGING_URL: smsMsgBase,
@@ -154,6 +160,7 @@ test("a booking is proposed and confirmed entirely over sms", async () => {
   await waitFor(() =>
     mailOut.some((m) => m.to[0] === CONTRACTOR_GATEWAY && /New booking/.test(m.body_markdown)),
   );
+  await smsCal.sync();
   const created = eventWrites.find((w) => w.method === "POST");
   assert.match(created.body.title, /fix my sink/);
 });
@@ -174,6 +181,7 @@ test("mailpoller carries a gateway reply into the loop", async () => {
     mailOut.some((m) => m.to[0] === CONTRACTOR_GATEWAY && /Client canceled/.test(m.body_markdown)),
   );
   assert.ok(patchedMail.includes("/api/mail/mail-cancel-1"));
+  await smsCal.sync();
   assert.ok(eventWrites.some((w) => w.method === "DELETE"));
 });
 

@@ -79,6 +79,13 @@ function createBusServer(env = process.env, overrides = {}) {
     res.end(JSON.stringify(payload ?? {}));
   }
 
+  let turn = Promise.resolve();
+  function enqueue(fn) {
+    const p = turn.then(fn);
+    turn = p.catch(() => {});
+    return p;
+  }
+
   function validInbound(body) {
     return (
       REQUIRED_INBOUND.every((k) => body[k] != null && body[k] !== "") &&
@@ -112,7 +119,7 @@ function createBusServer(env = process.env, overrides = {}) {
         return replyJson(res, 202, { accepted: false, duplicate: true });
       }
       replyJson(res, 202, { accepted: true });
-      loop.handle(body).catch((e) => console.error(`loop error: ${e.stack}`));
+      enqueue(() => loop.handle(body)).catch((e) => console.error(`loop error: ${e.stack}`));
       return;
     }
     if (path === "/webhooks/calendar") {
@@ -129,6 +136,7 @@ function createBusServer(env = process.env, overrides = {}) {
       }
       replyJson(res, 202, { accepted: true });
       notifyContractor({ kind, title, startAt, actor: body?.actor?.name }).catch((e) => console.error(`[bus] calendar notify failed: ${e.message}`));
+      calendar.sync?.();
       return;
     }
     if (path === "/voice/turn") {
@@ -146,7 +154,7 @@ function createBusServer(env = process.env, overrides = {}) {
       if (!store.dedup(msg.externalId)) {
         return replyJson(res, 200, { reply: "", duplicate: true });
       }
-      const reply = await loop.handle(msg);
+      const reply = await enqueue(() => loop.handle(msg));
       return replyJson(res, 200, { reply: reply ?? "" });
     }
     if (path === "/internal/digest") {
@@ -203,11 +211,15 @@ if (require.main === module) {
     STATE_FILE: process.env.STATE_FILE ?? join(__dirname, ".state.json"),
   };
   const port = Number(env.PORT ?? 4010);
-  const { server, store, notify, subscribe, subscribeOnce } = createBusServer(env);
+  const { server, store, notify, subscribe, subscribeOnce, calendar } = createBusServer(env);
   server.listen(port, async () => {
     console.log(`bus listening on :${port}`);
     await subscribe();
     setInterval(subscribeOnce, 30_000).unref();
+    if (calendar.sync) {
+      await calendar.sync();
+      setInterval(() => calendar.sync(), Number(env.CALENDAR_SYNC_MS ?? 30_000)).unref();
+    }
   });
   startReminders({
     store,

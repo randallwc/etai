@@ -90,7 +90,7 @@ function prefBounds(date, timePref, tz) {
   return [localToUtc(date, `${start}:00`, tz), localToUtc(date, `${end}:00`, tz)];
 }
 
-function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC") {
+function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC", now = new Date()) {
   const [start, end] = prefBounds(date, timePref, tz);
   const sorted = [...busy]
     .map((b) => ({ start: new Date(b.start ?? b.start_at), end: new Date(b.end ?? b.end_at) }))
@@ -98,6 +98,10 @@ function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC") {
   const need = durationMinutes * 60000;
   const slots = [];
   let cursor = start;
+  const soonest = new Date(now.getTime() + 15 * 60000);
+  if (cursor < soonest) {
+    cursor = new Date(Math.ceil(soonest.getTime() / (30 * 60000)) * 30 * 60000);
+  }
   for (const b of sorted) {
     while (cursor.getTime() + need <= Math.min(b.start.getTime(), end.getTime()) && slots.length < count) {
       slots.push({ start: new Date(cursor), end: new Date(cursor.getTime() + need) });
@@ -113,62 +117,177 @@ function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC") {
 }
 
 /**
- * Calendar adapter behind the agent loop. When Ambiguous is enabled it maps
- * the raw client surface (users/calendars/events/busySlots/CRUD) to the
- * loop's needs; with no API key it falls back to an in-memory stub so the
- * whole agent runs offline. CALENDAR=memory forces the stub even when an
- * Ambiguous key is present -- the whole stack runs with zero API calls.
+ * Calendar adapter behind the agent loop. When Ambiguous is enabled the
+ * adapter is an in-memory mirror over stubCalendar: every loop call (listDay,
+ * proposeSlots, create, reschedule, cancel) reads and writes memory, so
+ * replies never wait on the API. sync() drains queued writes to Ambiguous
+ * concurrently, then pulls remote events in parallel windowed chunks and
+ * merges them.
+ * Local event ids stay stable for callers; remoteIds translates at push time.
+ * With no key, or CALENDAR=memory, the bare stub runs with zero API calls.
  */
 function createCalendar({ ambi, env = process.env } = {}) {
   const client = ambi;
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
   if (!client?.enabled || env.CALENDAR === "memory") return stubCalendar(tz);
 
-  let userId, calendarId;
-  async function ids() {
-    if (!userId) {
+  let idsP;
+  function ids() {
+    idsP ??= (async () => {
       const users = await client.users();
-      userId = (users.find((u) => u.type === "human") ?? users[0])?.id;
-    }
-    if (!calendarId) {
+      const userId = (users.find((u) => u.type === "human") ?? users[0])?.id;
       const cals = await client.calendars();
-      calendarId = (cals.find((c) => c.is_default) ?? cals[0])?.id;
+      const calendarId = (cals.find((c) => c.is_default) ?? cals[0])?.id;
+      return { userId, calendarId };
+    })().catch((e) => {
+      idsP = undefined;
+      throw e;
+    });
+    return idsP;
+  }
+
+  const mem = stubCalendar(tz);
+  const pending = new Map();
+  const remoteIds = new Map();
+  const SYNC_HORIZON_MS = Number(env.CALENDAR_SYNC_DAYS ?? 45) * 864e5;
+  const SYNC_CHUNK_MS = 14 * 864e5;
+
+  function enqueue(id, op) {
+    if (pending.get(id) === "create" && op === "update") return;
+    if (op === "delete" && !remoteIds.has(id)) pending.delete(id);
+    else pending.set(id, op);
+  }
+
+  async function createEvent(body) {
+    const ev = await mem.createEvent(body);
+    pending.set(ev.id, "create");
+    return ev;
+  }
+
+  async function updateEvent(body) {
+    const ev = await mem.updateEvent(body);
+    enqueue(body.eventId, "update");
+    return ev;
+  }
+
+  async function cancelEvent(body) {
+    const ev = await mem.cancelEvent(body);
+    enqueue(body.eventId, "delete");
+    return ev;
+  }
+
+  async function apply(ops = []) {
+    const results = await mem.apply(ops);
+    ops.forEach((op, i) => {
+      if (op.op === "create" && results[i]?.id) pending.set(results[i].id, "create");
+      else if (op.op === "update") enqueue(op.eventId, "update");
+      else if (op.op === "delete" || op.op === "cancel") enqueue(op.eventId, "delete");
+    });
+    return results;
+  }
+
+  async function push() {
+    await Promise.all(
+      [...pending].map(async ([id, op]) => {
+        pending.delete(id);
+        const ev = mem.events.find((e) => e.id === id);
+        try {
+          if (op === "create" && ev) {
+            const { calendarId: cid } = await ids();
+            const remote = await client.createEvent(cid, {
+              title: ev.title,
+              start_at: ev.start,
+              end_at: ev.end,
+              description: ev.description,
+            });
+            remoteIds.set(id, remote.id);
+            ev.remoteId = remote.id;
+          } else if (op === "update" && ev && remoteIds.has(id)) {
+            await client.updateEvent(remoteIds.get(id), {
+              title: ev.title,
+              start_at: ev.start,
+              end_at: ev.end,
+              description: ev.description,
+            });
+          } else if (op === "delete" && remoteIds.has(id)) {
+            await client.deleteEvent(remoteIds.get(id));
+            remoteIds.delete(id);
+          }
+        } catch (e) {
+          pending.set(id, op);
+          console.error(`calendar push ${op}: ${e.message}`);
+        }
+      }),
+    );
+  }
+
+  async function pull() {
+    const t0 = Date.now() - 864e5;
+    const end = t0 + SYNC_HORIZON_MS;
+    const seen = new Set();
+    const chunks = [];
+    for (let a = t0; a < end; a += SYNC_CHUNK_MS) chunks.push(a);
+    const windows = await Promise.all(
+      chunks.map((a) =>
+        client.events(
+          encodeURIComponent(new Date(a).toISOString()),
+          encodeURIComponent(new Date(Math.min(a + SYNC_CHUNK_MS, end)).toISOString()),
+        ),
+      ),
+    );
+    for (const remote of windows) {
+      for (const r of remote) {
+        seen.add(r.id);
+        const local = mem.events.find((e) => e.id === r.id || remoteIds.get(e.id) === r.id);
+        if (local) {
+          if (!pending.has(local.id)) {
+            const { id: _rid, ...fields } = normEvent(r);
+            Object.assign(local, fields, { remoteId: r.id });
+          }
+        } else {
+          mem.events.push({ ...normEvent(r), remoteId: r.id });
+          remoteIds.set(r.id, r.id);
+        }
+      }
     }
-    return { userId, calendarId };
+    for (let i = mem.events.length - 1; i >= 0; i--) {
+      const e = mem.events[i];
+      const rid = remoteIds.get(e.id);
+      if (
+        rid && !pending.has(e.id) && !seen.has(rid) &&
+        e.start < new Date(end).toISOString() && e.end > new Date(t0).toISOString()
+      ) {
+        remoteIds.delete(e.id);
+        mem.events.splice(i, 1);
+      }
+    }
+  }
+
+  let syncing = false;
+  async function sync() {
+    if (syncing) return;
+    syncing = true;
+    try {
+      await push();
+      await pull();
+    } catch (e) {
+      console.error(`calendar sync: ${e.message}`);
+    } finally {
+      syncing = false;
+    }
   }
 
   return {
     stub: false,
-    async listDay({ date }) {
-      const [a, b] = dayBounds(date, tz);
-      return (await client.events(encodeURIComponent(a), encodeURIComponent(b))).map(normEvent);
-    },
-    async proposeSlots({ date, durationMinutes = 60, count = 3, timePref = null }) {
-      const { userId: uid } = await ids();
-      if (!uid) throw new Error("no Ambiguous user for availability");
-      const [a, b] = dayBounds(date, tz);
-      const busy = await client.busySlots(uid, a, b);
-      return findSlots(busy, date, durationMinutes, count, timePref, tz);
-    },
-    async createEvent({ title, start, end, description }) {
-      const { calendarId: cid } = await ids();
-      return client.createEvent(cid, {
-        title,
-        start_at: new Date(start).toISOString(),
-        end_at: new Date(end).toISOString(),
-        description,
-      });
-    },
-    async updateEvent({ eventId, start, end }) {
-      const body = {};
-      if (start) body.start_at = new Date(start).toISOString();
-      if (end) body.end_at = new Date(end).toISOString();
-      return client.updateEvent(eventId, body);
-    },
-    async cancelEvent({ eventId }) {
-      await client.deleteEvent(eventId);
-      return { id: eventId, status: "canceled" };
-    },
+    events: mem.events,
+    listDay: mem.listDay,
+    proposeSlots: mem.proposeSlots,
+    createEvent,
+    updateEvent,
+    cancelEvent,
+    apply,
+    sync,
+    pendingOps: () => pending.size,
   };
 }
 
@@ -202,19 +321,37 @@ function stubCalendar(tz = "UTC") {
         description,
         status: "confirmed",
       };
+      const clash = events.find(
+        (o) => o.status !== "canceled" && ev.start < o.end && ev.end > o.start
+      );
+      if (clash) {
+        const e = new Error(`overlaps "${clash.title}" at ${clash.start}`);
+        e.code = "conflict";
+        throw e;
+      }
       events.push(ev);
       return ev;
     },
     async updateEvent({ eventId, title, start, end, description, status }) {
       const ev = events.find((e) => e.id === eventId);
-      if (ev) {
-        if (title !== undefined) ev.title = title;
-        if (start) ev.start = new Date(start).toISOString();
-        if (end) ev.end = new Date(end).toISOString();
-        if (description !== undefined) ev.description = description;
-        if (status !== undefined) ev.status = status;
+      if (!ev) return { id: eventId };
+      const nextStart = start ? new Date(start).toISOString() : ev.start;
+      const nextEnd = end ? new Date(end).toISOString() : ev.end;
+      const nextStatus = status !== undefined ? status : ev.status;
+      const clash = events.find(
+        (o) => o !== ev && o.status !== "canceled" && nextStatus !== "canceled" && nextStart < o.end && nextEnd > o.start
+      );
+      if (clash) {
+        const e = new Error(`overlaps "${clash.title}" at ${clash.start}`);
+        e.code = "conflict";
+        throw e;
       }
-      return ev ?? { id: eventId };
+      if (title !== undefined) ev.title = title;
+      ev.start = nextStart;
+      ev.end = nextEnd;
+      if (description !== undefined) ev.description = description;
+      ev.status = nextStatus;
+      return ev;
     },
     async cancelEvent({ eventId }) {
       const i = events.findIndex((e) => e.id === eventId);
@@ -223,10 +360,14 @@ function stubCalendar(tz = "UTC") {
     async apply(ops = []) {
       const results = [];
       for (const op of ops) {
-        if (op.op === "create") results.push(await api.createEvent(op));
-        else if (op.op === "update") results.push(await api.updateEvent(op));
-        else if (op.op === "delete" || op.op === "cancel") results.push(await api.cancelEvent(op));
-        else results.push({ error: `unknown op ${op.op}` });
+        try {
+          if (op.op === "create") results.push(await api.createEvent(op));
+          else if (op.op === "update") results.push(await api.updateEvent(op));
+          else if (op.op === "delete" || op.op === "cancel") results.push(await api.cancelEvent(op));
+          else results.push({ error: `unknown op ${op.op}` });
+        } catch (e) {
+          results.push({ error: e.message });
+        }
       }
       return results;
     },
