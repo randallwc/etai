@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { loadBoard, saveBoard, seedBoard, transition } from "./jobs.js";
+import {
+  loadBoard,
+  mergeCalendarJobs,
+  saveBoard,
+  seedBoard,
+  transition,
+} from "./jobs.js";
 
 function memoryStorage() {
   const data = new Map();
@@ -56,7 +62,7 @@ describe("loadBoard and saveBoard", () => {
   });
 
   it("falls back to the seed on corrupt JSON", () => {
-    localStorage.setItem("etai.board.v3", "{not json");
+    localStorage.setItem("etai.board.v4", "{not json");
     expect(loadBoard()).toEqual(seedBoard());
   });
 
@@ -106,5 +112,118 @@ describe("transition", () => {
     expect(board.jobs.find((j) => j.id === "job_other").status).toBe(
       "confirmed"
     );
+  });
+});
+
+describe("mergeCalendarJobs", () => {
+  const NOW = new Date("2026-09-12T18:00:00Z");
+  const base = {
+    contractor: { id: "contractor" },
+    customers: [
+      { id: "cust_a", name: "Marta Reyes", phone: "+15550101010" },
+    ],
+    jobs: [],
+  };
+  const ev = (over = {}) => ({
+    id: "ev1",
+    title: "Meeting with Dana",
+    start_at: "2026-09-13T16:00:00Z",
+    end_at: "2026-09-13T17:00:00Z",
+    ...over,
+  });
+
+  it("turns an event into a job and a customer from the Client line", () => {
+    const board = mergeCalendarJobs(
+      base,
+      [
+        ev({
+          description: "fix lock\nClient: Dana Kim +15559877655",
+          location: "12 Main St",
+        }),
+      ],
+      [],
+      NOW
+    );
+    const job = board.jobs[0];
+    expect(job.ambiguousEventId).toBe("ev1");
+    expect(job.status).toBe("confirmed");
+    expect(job.address).toBe("12 Main St");
+    expect(job.description).toBe("fix lock");
+    const cust = board.customers.find((c) => c.id === job.customerId);
+    expect(cust.name).toBe("Dana Kim");
+    expect(cust.phone).toBe("+15559877655");
+  });
+
+  it("matches an existing customer by phone digits and keeps crm id", () => {
+    const contacts = [{ id: "crm-9", name: "Marta R", phone: "1 (555) 010-1010" }];
+    const board = mergeCalendarJobs(
+      base,
+      [ev({ title: "lockout +15550101010", description: "Client: unknown" })],
+      contacts,
+      NOW
+    );
+    expect(board.jobs[0].customerId).toBe("cust_a");
+    expect(board.customers.length).toBe(1);
+    expect(board.customers[0].ambiguousCrmId).toBeUndefined();
+  });
+
+  it("marks past events done and cancelled events canceled", () => {
+    const board = mergeCalendarJobs(
+      base,
+      [
+        ev({ id: "old", end_at: "2026-09-12T10:00:00Z" }),
+        ev({ id: "gone", status: "cancelled", title: "x" }),
+      ],
+      [],
+      NOW
+    );
+    expect(board.jobs.find((j) => j.ambiguousEventId === "old").status).toBe("done");
+    expect(board.jobs.find((j) => j.ambiguousEventId === "gone").status).toBe("canceled");
+  });
+
+  it("keeps local status for a tracked event and drops vanished ones", () => {
+    const seeded = {
+      ...base,
+      jobs: [
+        {
+          id: "job_1",
+          customerId: "cust_a",
+          contractorId: "contractor",
+          ambiguousEventId: "ev1",
+          status: "en_route",
+          window: { start: "s", end: "e" },
+          description: "lockout",
+          source: "message",
+          eta: "eta1",
+        },
+        {
+          id: "job_2",
+          customerId: "cust_a",
+          contractorId: "contractor",
+          ambiguousEventId: "ev_gone",
+          status: "confirmed",
+          window: { start: "s", end: "e" },
+          description: "old",
+          source: "message",
+        },
+        {
+          id: "job_local",
+          customerId: "cust_a",
+          contractorId: "contractor",
+          status: "confirmed",
+          window: { start: "s", end: "e" },
+          description: "local only",
+          source: "message",
+        },
+      ],
+    };
+    const board = mergeCalendarJobs(seeded, [ev()], [], NOW);
+    const kept = board.jobs.find((j) => j.ambiguousEventId === "ev1");
+    expect(kept.id).toBe("job_1");
+    expect(kept.status).toBe("en_route");
+    expect(kept.eta).toBe("eta1");
+    expect(kept.source).toBe("message");
+    expect(board.jobs.some((j) => j.ambiguousEventId === "ev_gone")).toBe(false);
+    expect(board.jobs.some((j) => j.id === "job_local")).toBe(true);
   });
 });
