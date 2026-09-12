@@ -2,12 +2,27 @@
 
 Guidance for AI coding agents (and humans) working in this repository.
 Read this file fully before making changes. When it conflicts with a
-guess, this file wins. AGENT.md holds the team's engineering rules; this
-file holds the project map.
+guess, this file wins.
 
 ---
 
-## 1. Project mission
+## 1. Engineering rules
+
+1. No comments in code. Docstrings only on external, well-named
+   functions.
+1. Always create a schema before writing code and commit it first,
+   under `models/`.
+1. Keep documents in `./docs`, unix format, no tables. Prose summaries
+   of each external part; document gotchas and tried-and-rejected
+   approaches so others can learn.
+1. Never over-engineer. KISS.
+1. Commits: one-line heading plus 2-3 sentences. Keep details in
+   `./docs`.
+1. Tests: up to 80% line and branch coverage per commit, enforced by a
+   git hook that runs tests on commit creation. Do not over-test or
+   split code just to hit the number; test shared things more.
+
+## 2. Project mission
 
 A **call-your-agent** web app on top of Ambiguous.ai. The user opens the
 app and is immediately in a FaceTime-style call with a personal agent.
@@ -20,13 +35,12 @@ Every agent has a distinct persona: name, role, theme color, greeting.
 The call UI is the agent's full-screen visual plus the user's camera in a
 draggable picture-in-picture tile.
 
-## 2. Repository layout
+## 3. Repository layout
 
 ```
 /
 ├── README.md
 ├── AGENTS.md                  this file
-├── AGENT.md                   team engineering rules
 ├── SHARED_MEMORY.md           live state + landmines for all agents
 ├── FAISAL_MEMORY.md           Devin's machine/repo notes
 ├── LICENSE
@@ -71,7 +85,7 @@ draggable picture-in-picture tile.
             └── AgentSurface.jsx   full-screen agent visual (orb today)
 ```
 
-## 3. Commands
+## 4. Commands
 
 Root tests (backend, node:test): `npm test` from repo root — the glob is
 `'*/tests/*.test.js'`; `node --test <dir>` does not discover tests.
@@ -89,23 +103,23 @@ change with `npm run build` and `npm test` before considering it done.
 Note: the commit hook runs only root `npm test` — run the frontend
 suite yourself before committing frontend changes.
 
-## 4. Sub-agent roles
+## 5. Sub-agent roles
 
 When parallelizing work, split along these boundaries. Each role owns its
 files exclusively — never let two agents edit the same file.
 
-### 4.1 Frontend UI Agent
+### 5.1 Frontend UI Agent
 Owns `frontend/src/components/` and `frontend/src/styles.css`. Builds the
 call interface: agent surface, camera PiP, captions, controls, persona
 theming. Does not touch state flow in `CallScreen` without coordinating
 with the conversation role.
 
-### 4.2 Persona / Conversation Agent
+### 5.2 Persona / Conversation Agent
 Owns `frontend/src/agents.js`, `frontend/src/lib/parseRequest.js`, and the
 dialogue flow inside `CallScreen`. Personas must feel human: distinct
 voice, no generic chatbot phrasing.
 
-### 4.3 Integration Agent
+### 5.3 Integration Agent
 Owns `frontend/src/api/ambiguous.js` and `frontend/src/lib/schedule.js`.
 The contract: `fetchCoworkers` (roster from /users), `fetchDaySummary`
 (calendar + tasks), `createTask`, `handleRequest` (scheduling and task
@@ -113,12 +127,12 @@ routing mid-call), `sendConversation` (transcript handoff). Components
 never fetch Ambiguous endpoints directly. Every function degrades
 gracefully when no API key is set.
 
-### 4.4 Media Agent (future)
+### 5.4 Media Agent (future)
 Owns the agent visual surface and audio I/O. Swaps the orb for real
 generated video and wires mic to STT, TTS to speaker. The seam is
 `AgentSurface` — keep its props (`agent`, `speaking`) stable.
 
-### 4.5 Messaging / Phone Agent
+### 5.5 Messaging / Phone Agent
 Owns `messaging/` — the phone service behind the docs/PHONE.md
 contract. Transports (BlueBubbles, sim, ambimail, LoopMessage/Twilio if
 added) live in `transports.js`; normalization in `normalize.js`;
@@ -126,7 +140,7 @@ fanout/dedup in `index.js`. Invariant: subscribers only ever see the
 normalized inboundMessage shape; transport detail never crosses the
 boundary.
 
-### 4.6 Agent Core Agent
+### 5.6 Agent Core Agent
 Owns `agent/` (planned — docs/messaging-plan.md). Consumes normalized
 inbound from the messaging service, owns per-thread state and the data
 model (models/*.schema.json), decides intent, calls Ambiguous through
@@ -134,7 +148,7 @@ its own `agent/ambiguous.js` client, replies via POST /send. Never
 touches a transport directly. The Ambiguous boundary rule applies here
 too: one file fetches Ambiguous.
 
-## 5. Architecture rules
+## 6. Architecture rules
 
 1. Small state, one owner. `App.jsx` loads the coworker list and holds
    the selected agent. `CallScreen.jsx` owns the call phase machine:
@@ -151,12 +165,6 @@ too: one file fetches Ambiguous.
    persona defines; the orb today, a video stream later.
 5. Graceful degradation. Camera denied means a placeholder tile and the
    user continues by text.
-
-## 6. Conventions
-
-See AGENT.md for the rules: no code comments (docstrings on external
-functions only), schema-first under models/, docs in ./docs in unix prose
-format, KISS, short commits, 80% test coverage enforced by a git hook.
 
 ## 7. Ambiguous.ai reference
 
