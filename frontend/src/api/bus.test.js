@@ -72,6 +72,39 @@ describe("voiceTurn", () => {
   });
 });
 
+describe("synthSpeech", () => {
+  it("posts text to {VITE_BUS_URL}/tts and resolves the audio blob", async () => {
+    const blob = { fake: "mp3" };
+    const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => blob }));
+    vi.stubGlobal("fetch", fetchMock);
+    const m = await loadModule("http://localhost:4010");
+    expect(await m.synthSpeech("hello")).toBe(blob);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:4010/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hello" }),
+    });
+  });
+
+  it("resolves null when the bus is unset, errors, or is unreachable", async () => {
+    const unset = await loadModule("");
+    expect(await unset.synthSpeech("hi")).toBeNull();
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503 })));
+    let m = await loadModule("http://localhost:4010");
+    expect(await m.synthSpeech("hi")).toBeNull();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("down");
+      })
+    );
+    m = await loadModule("http://localhost:4010");
+    expect(await m.synthSpeech("hi")).toBeNull();
+  });
+});
+
 describe("fetchBoard", () => {
   it("gets {VITE_BUS_URL}/state and resolves the parsed object", async () => {
     const board = { jobs: [{ id: "j1" }], threads: {} };

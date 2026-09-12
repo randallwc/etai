@@ -18,6 +18,40 @@ day's plan lives in someone's head. Field-service software (Jobber, Housecall
 Pro, ServiceTitan) assumes both sides adopt an app and a portal. Clients never
 do. The failure is not features; it is the interface.
 
+FIVE WHYS
+---------
+
+Why does etAI exist? A trade worker cannot run a schedule while doing the
+work. Every booking, reschedule, and "where are you" text competes with
+the job in their hands, and the phone is the thing they have to ignore to
+do the job at all.
+
+Why is that a problem? Scheduling chaos. Double-bookings, dead gaps
+between jobs, clients who never hear an ETA and call mid-job to ask. The
+day gets planned in someone's head or between jobs, and it falls apart
+the moment anything shifts.
+
+Why doesn't existing software fix it? Dispatch tools assume an office
+with a dispatcher running them, and they assume clients adopt a portal.
+A solo worker is the back office; they do not have time to operate the
+tool that is supposed to save them time, their clients never install the
+app, and hiring a human dispatcher does not pencil out for a one-truck
+operation.
+
+Why an agent over text instead of a better app? Because the interface
+has to cost zero effort on both sides. Texting is what the worker and
+the client already do. An agent that understands freeform texts,
+negotiates slots against a real calendar, and writes the booking removes
+the work instead of moving it into a dashboard. A form or a rules-based
+bot breaks the first time a client sends "can you come Thursday after 3,
+gate code is 4412".
+
+Why does that matter enough to build? Time is the trade worker's real
+inventory. Less scheduling overhead means more jobs per day, which means
+more clients, which means more money. The coordination layer has always
+been priced for companies with staff; etAI delivers it for the cost of a
+text thread.
+
 PRODUCT
 -------
 
@@ -178,6 +212,38 @@ in AGENTS.md section 5; this is the current roster:
     fake-Ambiguous + fake-phone end-to-end coverage.
   - Docs Agent -- docs/*: keeps prose docs honest after merges and rewrites.
   - Devops / Serve Agent -- serve.sh, watchdogs, tunnel setup, env files.
+
+WHY THIS BUILD
+--------------
+
+The hackathon brief asks for an agent that shows up where people already
+work. The trades are the sharpest version of that brief: the work happens
+in trucks and crawl spaces, the coordination already happens in a text
+thread, and every existing tool tries to pull both into software nobody
+asked for.
+
+The build follows the ponytail rule from AGENTS.md - the best code is the
+code never written, and every choice stops at the first rung that holds:
+
+  - No app. The product surface is a phone number. Zero install for
+    clients, zero onboarding for the contractor.
+  - No new platform. Ambiguous already provides calendar, CRM, tasks, and
+    mail behind one API key, so the system of record is a dependency
+    instead of a build.
+  - No framework ceremony. The bus is one agent loop - inbound text,
+    classify, tool call, reply - in plain Node with zero-dep shared
+    helpers.
+  - No delivery infrastructure. ambimail turns Ambiguous mail into SMS
+    through the carrier gateway. The messaging service stays an adapter
+    so BlueBubbles, Twilio, or the simulator carry the same messages.
+  - One boundary per integration. One file fetches Ambiguous in the bus,
+    one in the frontend. Stub fallbacks keep every flow testable offline.
+
+The result is small enough to demo end-to-end and honest about its
+ceilings: carrier routing is a JSON map, slot finding is a linear scan,
+intent classification falls back to regex when the model is unavailable.
+Each simplification is named in the docs with its upgrade path - you may
+simplify, but you never hide the seam.
 
 SCOPE
 -----

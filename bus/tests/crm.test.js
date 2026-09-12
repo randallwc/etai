@@ -24,7 +24,7 @@ async function serve({ upsertContact }) {
       ai: {
         classify: async (body) =>
           /book|need/.test(body.toLowerCase())
-            ? { intent: "book", dayRef: "tomorrow", name: "Jane", description: body }
+            ? { intent: "book", dayRef: "tomorrow", name: "Jane", description: body, location: "1 Main St" }
             : { intent: "other" },
       },
       calendar,
@@ -114,7 +114,7 @@ test("an unknown-name client still syncs to the CRM keyed by phone", async () =>
         createTask: async (t) => ({ title: t }),
       },
       ai: {
-        classify: async () => ({ intent: "book", dayRef: "tomorrow", name: null, description: "x" }),
+        classify: async () => ({ intent: "book", dayRef: "tomorrow", name: null, description: "x", location: "1 Main St" }),
       },
       calendar,
       notify: async ({ to, body }) => {

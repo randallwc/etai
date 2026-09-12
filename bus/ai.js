@@ -38,7 +38,7 @@ function prompt(text, todayLabel, ctx) {
     "You are the intent extractor for a contractor's scheduling assistant.",
     channelPrompt(ctx?.channel),
     "Return ONLY raw JSON matching this shape, no markdown, no prose:",
-    '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|clarify|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","jobRef":"","question":"","say":"","slotChoice":0}',
+    '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|clarify|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","location":"","jobRef":"","question":"","say":"","slotChoice":0}',
     "Use null for any field that is absent. Rules:",
     '- "running N late", "behind", "stuck in traffic" -> running_late, delayMinutes=N',
     "- asking about today's or a day's schedule -> day_summary",
@@ -50,6 +50,7 @@ function prompt(text, todayLabel, ctx) {
     '- references an existing job ("the sprinkler one", "my 2pm") -> set jobRef to its id, title fragment, or time',
     "- compound requests (cancel AND rebook) or not enough info to act -> clarify with a short question",
     "- for clarify and other, draft the reply in say (one or two SMS sentences; never promise an action the intent does not perform)",
+    "- the caller gives their name (it's Sam, this is Dana, Dana here) -> set name to that name",
     "- anything else -> other",
     ...contextLines(ctx),
     `Today is ${todayLabel}.`,
@@ -62,21 +63,67 @@ function prompt(text, todayLabel, ctx) {
  * (no AMBIG_API). Covers the demo-critical intents; everything else is
  * "other" and hits the loop's help text.
  */
+const DAY_RE = /day after tomorrow|tomorrow|today|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week/;
+
+const NAME_STOP = new Set([
+  "a", "an", "the", "me", "my", "your", "our", "his", "her", "their", "its", "it", "this", "that",
+  "you", "we", "they", "he", "she", "i", "and", "or", "but", "so", "too", "not", "no", "yes", "if",
+  "about", "regarding", "for", "to", "from", "with", "at", "in", "on", "by", "up", "down", "out", "off", "over",
+  "urgent", "emergency", "important", "just", "only", "also", "still", "again", "very", "really",
+  "now", "then", "here", "there", "ok", "okay", "fine", "good", "bad", "done", "all", "same", "right",
+  "something", "anything", "nothing", "everything", "someone", "anyone", "everyone",
+  "somebody", "anybody", "everybody", "nobody", "who", "what", "where", "when", "why", "how",
+  "time", "calling", "texting", "speaking", "back", "late", "early", "home", "free", "busy",
+  "please", "thanks", "thank", "sorry", "hi", "hey", "hello", "yo", "available", "stuck",
+  "running", "looking", "wondering", "trying", "hoping", "checking", "interested",
+  "ridiculous", "crazy", "insane", "serious", "terrible", "awful", "great", "nice", "cool",
+  "alright", "sure", "yeah", "yep", "nope", "am", "is", "are", "was", "were", "do", "does",
+]);
+
+function extractName(s) {
+  const m =
+    s.match(/\b(?:it's|its|it is|this is|i'm|im|i am|my name is|name is)\s+([a-z]{2,})\b/) ??
+    s.match(/\b([a-z]{2,})\s+here\b/);
+  const w = m?.[1];
+  return w && !NAME_STOP.has(w) ? w[0].toUpperCase() + w.slice(1) : null;
+}
+
+function extractFields(text) {
+  const s = text.toLowerCase();
+  const out = {};
+  const name = extractName(s);
+  if (name) out.name = name;
+  const day = s.match(DAY_RE);
+  if (day) out.dayRef = day[0] === "tonight" ? "today" : day[0];
+  const at = s.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+  if (at) out.timePref = `${(+at[1] % 12) + (at[3] === "pm" ? 12 : 0)}:${at[2] ?? "00"}`;
+  else if (/\bmorning\b/.test(s)) out.timePref = "morning";
+  else if (/\bafternoon\b/.test(s)) out.timePref = "afternoon";
+  else if (/\bevening\b|tonight/.test(s)) out.timePref = "evening";
+  const loc = s.match(
+    /\b(?:at|on)\s+([a-z0-9 .,'#-]+?)(?=\s+(?:today|tonight|tomorrow|morning|afternoon|evening|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s*(?:am|pm))\b|\s*$)/i
+  );
+  if (loc && /\d/.test(loc[1])) out.location = loc[1].trim();
+  return out;
+}
+
 function fallbackClassify(text) {
   const s = text.toLowerCase();
+  const fields = extractFields(text);
+  const named = fields.name ? { name: fields.name } : {};
   const late = s.match(/running\s+(\d+)?\s*(min(?:ute)?s?\s+)?late|behind|stuck in traffic/);
   if (late) {
     const mins = s.match(/(\d+)\s*(?:min|late)/)?.[1];
-    return { intent: "running_late", delayMinutes: mins ? +mins : null };
+    return { intent: "running_late", delayMinutes: mins ? +mins : null, ...named };
   }
-  if (/my (day|schedule|route)|schedule today|tomorrow'?s schedule/.test(s)) return { intent: "day_summary" };
-  if (/cancel/.test(s)) return { intent: "cancel" };
-  if (/resched|move|push back|different time/.test(s)) return { intent: "reschedule" };
-  if (/where are you|\beta\b|when.*(here|arrive|coming)|how (far|long)|arriving/.test(s)) return { intent: "eta" };
+  if (/my (day|schedule|route)|schedule today|tomorrow'?s schedule/.test(s)) return { intent: "day_summary", ...named };
+  if (/cancel/.test(s)) return { intent: "cancel", ...named };
+  if (/resched|move|push back|different time/.test(s)) return { intent: "reschedule", ...fields };
+  if (/where are you|\beta\b|when.*(here|arrive|coming)|how (far|long)|arriving/.test(s)) return { intent: "eta", ...named };
   if (/need|book|schedul|appointment|come (by|over|fix)|fix|available|can you/.test(s)) {
-    return { intent: "book", description: text };
+    return { intent: "book", description: text, ...fields };
   }
-  return { intent: "other" };
+  return { intent: "other", ...fields };
 }
 
 function normalize(raw) {
@@ -89,6 +136,7 @@ function normalize(raw) {
     delayMinutes: Number.isInteger(raw.delayMinutes) && raw.delayMinutes > 0 ? raw.delayMinutes : null,
     name: typeof raw.name === "string" && raw.name ? raw.name : null,
     description: typeof raw.description === "string" && raw.description ? raw.description : null,
+    location: typeof raw.location === "string" && raw.location ? raw.location : null,
     jobRef: typeof raw.jobRef === "string" && raw.jobRef ? raw.jobRef : null,
     question: typeof raw.question === "string" && raw.question ? raw.question : null,
     say: typeof raw.say === "string" && raw.say ? raw.say : null,
@@ -130,4 +178,4 @@ function createAi({ chat, env = process.env, now = () => new Date() }) {
   return { classify, extractJson, fallbackClassify };
 }
 
-module.exports = { createAi, extractJson };
+module.exports = { createAi, extractJson, extractFields };

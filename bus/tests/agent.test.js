@@ -15,7 +15,12 @@ function fakeIntent(body) {
   if (late) return { intent: "running_late", delayMinutes: +(late[1] ?? late[2] ?? 15) };
   if (/^cancel/.test(s)) return { intent: "cancel" };
   if (/need|book|come|fix/.test(s)) {
-    return { intent: "book", dayRef: /thursday/.test(s) ? "thursday" : /tomorrow/.test(s) ? "tomorrow" : null, description: body };
+    return {
+      intent: "book",
+      dayRef: /thursday/.test(s) ? "thursday" : /tomorrow/.test(s) ? "tomorrow" : null,
+      description: body,
+      location: s.match(/\d+\s+\w+\s+(?:st|ave|rd|dr|ln|blvd|way)\b/)?.[0] ?? null,
+    };
   }
   return { intent: "other" };
 }
@@ -75,13 +80,41 @@ const lastTo = (to) => sent.filter((m) => m.to === to).at(-1);
 
 test("book -> pick a slot -> locked in", async () => {
   const before = sent.length;
-  await inbound("b1", "need sprinklers fixed Thursday");
+  await inbound("b1", "need sprinklers fixed thursday at 22 main st");
   await waitForReplies(before + 1);
   assert.match(lastTo("+15551234567").body, /which works/i);
   await inbound("b2", "1");
   await waitForReplies(before + 3);
   assert.match(lastTo("+15551234567").body, /locked in/i);
   assert.match(lastTo("+15550999999").body, /new booking/i);
+});
+
+test("book asks for a day and address before offering slots", async () => {
+  const before = sent.length;
+  await inbound("g1", "book a job");
+  await waitForReplies(before + 1);
+  assert.match(sent.at(-1).body, /what day or time works.*address/i);
+
+  await inbound("g2", "tomorrow");
+  await waitForReplies(before + 2);
+  assert.match(sent.at(-1).body, /address/i);
+
+  await inbound("g3", "220 main st");
+  await waitForReplies(before + 3);
+  assert.match(sent.at(-1).body, /reply with a number/i);
+
+  await inbound("g4", "1");
+  await waitForReplies(before + 4);
+  assert.match(sent.at(-1).body, /locked in/i);
+});
+
+test("a pending booking can be abandoned", async () => {
+  const before = sent.length;
+  await inbound("ab1", "book a job");
+  await waitForReplies(before + 1);
+  await inbound("ab2", "never mind");
+  await waitForReplies(before + 2);
+  assert.match(sent.at(-1).body, /nothing changed/i);
 });
 
 test("day summary answers with the route", async () => {

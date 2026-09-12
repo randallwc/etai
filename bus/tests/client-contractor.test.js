@@ -17,7 +17,12 @@ function fakeIntent(body) {
   if (/move|resched/.test(s)) return { intent: "reschedule", dayRef: "friday" };
   if (/cancel/.test(s)) return { intent: "cancel" };
   if (/need|book|come|fix/.test(s)) {
-    return { intent: "book", dayRef: /thursday/.test(s) ? "thursday" : "tomorrow", description: body };
+    return {
+      intent: "book",
+      dayRef: /thursday/.test(s) ? "thursday" : "tomorrow",
+      description: body,
+      location: s.match(/\d+\s+\w+\s+(?:st|ave|rd|dr|ln|blvd|way)\b/)?.[0] ?? null,
+    };
   }
   return { intent: "other" };
 }
@@ -57,7 +62,7 @@ async function serve(extraEnv = {}) {
 test("client booking offers multiple slots and picking one books it, contractor told", async () => {
   const { server, sent, calendar, inbound, until } = await serve();
   try {
-    await inbound("c1", "need sprinklers fixed tomorrow");
+    await inbound("c1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     const offer = sent[0];
     assert.equal(offer.to, CLIENT);
@@ -83,7 +88,7 @@ test("client booking offers multiple slots and picking one books it, contractor 
 test("contractor running late shifts the job and texts the client a new ETA", async () => {
   const { server, sent, inbound, until } = await serve();
   try {
-    await inbound("l1", "book a job tomorrow");
+    await inbound("l1", "book a job tomorrow at 22 main st");
     await inbound("l2", "1");
     await until(3);
     await inbound("l3", "running 20 late", CONTRACTOR);
@@ -100,7 +105,7 @@ test("contractor running late shifts the job and texts the client a new ETA", as
 test("client cancel frees the slot and notifies the contractor", async () => {
   const { server, sent, inbound, until } = await serve();
   try {
-    await inbound("x1", "book tomorrow");
+    await inbound("x1", "book tomorrow at 22 main st");
     await inbound("x2", "1");
     await until(3);
     await inbound("x3", "cancel my appointment");
@@ -117,7 +122,7 @@ test("client cancel frees the slot and notifies the contractor", async () => {
 test("reschedule proposes slots and moves the existing event", async () => {
   const { server, sent, inbound, until } = await serve();
   try {
-    await inbound("r1", "book tomorrow");
+    await inbound("r1", "book tomorrow at 22 main st");
     await inbound("r2", "1");
     await until(3);
     await inbound("r3", "need to move it to friday");
@@ -171,7 +176,7 @@ test("reminder texts the contractor once inside the lead window", async () => {
 test("voice turn returns the reply synchronously and still texts the counterparty", async () => {
   const { server, sent, base, inbound, until } = await serve();
   try {
-    await inbound("v1", "book a job tomorrow");
+    await inbound("v1", "book a job tomorrow at 22 main st");
     await inbound("v2", "1");
     await until(3);
     const res = await fetch(`${base}/voice/turn`, {
@@ -199,7 +204,7 @@ test("voice turn returns the reply synchronously and still texts the counterpart
 test("a slot taken between offer and pick is refused and fresh options sent", async () => {
   const { server, sent, calendar, store, inbound, until } = await serve();
   try {
-    await inbound("t1", "need sprinklers fixed tomorrow");
+    await inbound("t1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     const date = resolveDayRef("tomorrow", "UTC", new Date());
     const [slot1] = await calendar.proposeSlots({ date, durationMinutes: 60, count: 1 });
@@ -226,7 +231,7 @@ test("a slot taken between offer and pick is refused and fresh options sent", as
 test("a confirmed job in state blocks a pick the calendar still shows open", async () => {
   const { server, sent, calendar, store, inbound, until } = await serve();
   try {
-    await inbound("k1", "need sprinklers fixed tomorrow");
+    await inbound("k1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     const date = resolveDayRef("tomorrow", "UTC", new Date());
     const [slot1] = await calendar.proposeSlots({ date, durationMinutes: 60, count: 1 });
@@ -249,7 +254,7 @@ test("a confirmed job in state blocks a pick the calendar still shows open", asy
 test("a numeric pick selects the matching option", async () => {
   const { server, sent, calendar, inbound, until } = await serve();
   try {
-    await inbound("n1", "need sprinklers fixed tomorrow");
+    await inbound("n1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     await inbound("n2", "2");
     await until(3);
@@ -266,7 +271,7 @@ test("a numeric pick selects the matching option", async () => {
 test("an out-of-range number re-asks and the proposal stays alive", async () => {
   const { server, sent, store, inbound, until } = await serve();
   try {
-    await inbound("o1", "need sprinklers fixed tomorrow");
+    await inbound("o1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     await inbound("o2", "9");
     await until(2);
@@ -284,7 +289,7 @@ test("an out-of-range number re-asks and the proposal stays alive", async () => 
 test("a natural-language pivot inside a proposal starts a new proposal", async () => {
   const { server, sent, store, calendar, inbound, until } = await serve();
   try {
-    await inbound("p1", "need sprinklers fixed tomorrow");
+    await inbound("p1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     await inbound("p2", "actually can i move it to friday instead");
     await until(2);
@@ -304,7 +309,7 @@ test("a natural-language pivot inside a proposal starts a new proposal", async (
 test("reschedule moves the one existing event rather than creating a second", async () => {
   const { server, sent, calendar, store, inbound, until } = await serve();
   try {
-    await inbound("m1", "book tomorrow");
+    await inbound("m1", "book tomorrow at 22 main st");
     await inbound("m2", "1");
     await until(3);
     const date = resolveDayRef("tomorrow", "UTC", new Date());
@@ -328,7 +333,7 @@ test("reschedule moves the one existing event rather than creating a second", as
 test("a second pick after booking gets a help reply, not a duplicate job", async () => {
   const { server, sent, store, calendar, inbound, until } = await serve();
   try {
-    await inbound("d1", "need sprinklers fixed tomorrow");
+    await inbound("d1", "need sprinklers fixed tomorrow at 22 main st");
     await until(1);
     await inbound("d2", "1");
     await until(3);

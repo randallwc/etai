@@ -19,6 +19,7 @@ function createBusServer(env = process.env, overrides = {}) {
   const messagingUrl = env.MESSAGING_URL?.replace(/\/$/, "");
   const contractorPhone = env.CONTRACT_PHONE ?? env.CONTRACTOR_PHONE;
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
+  const tts = overrides.tts !== undefined ? overrides.tts : createTts({ env });
 
   const notify =
     overrides.notify ??
@@ -76,9 +77,15 @@ function createBusServer(env = process.env, overrides = {}) {
     });
   }
 
+  const CORS = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "content-type",
+  };
+
   function replyJson(res, status, payload) {
-    res.writeHead(status, { "content-type": "application/json" });
-    res.end(JSON.stringify(payload ?? {}));
+    res.writeHead(status, { "content-type": "application/json", ...CORS });
+    res.end(status === 204 ? undefined : JSON.stringify(payload ?? {}));
   }
 
   let turn = Promise.resolve();
@@ -101,6 +108,7 @@ function createBusServer(env = process.env, overrides = {}) {
   }
 
   async function handle(req, res) {
+    if (req.method === "OPTIONS") return replyJson(res, 204);
     const path = new URL(req.url, "http://localhost").pathname;
     if (req.method === "GET" && path === "/healthz") {
       return replyJson(res, 200, {
@@ -108,6 +116,7 @@ function createBusServer(env = process.env, overrides = {}) {
         stub: calendar.stub ?? false,
         ambiguous: ambi.enabled,
         messaging: Boolean(messagingUrl),
+        tts: Boolean(tts),
       });
     }
     if (req.method === "GET" && path === "/state") {
@@ -169,6 +178,21 @@ function createBusServer(env = process.env, overrides = {}) {
       }
       const reply = await enqueue(() => loop.handle(msg));
       return replyJson(res, 200, { reply: reply ?? "" });
+    }
+    if (path === "/tts") {
+      if (!tts) {
+        return replyJson(res, 503, { error: { code: "unavailable", message: "tts not installed" } });
+      }
+      if (typeof body.text !== "string" || !body.text) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "need text" } });
+      }
+      try {
+        const audio = await tts.synthesize(body.text);
+        res.writeHead(200, { "content-type": "audio/mpeg", ...CORS });
+        return res.end(audio);
+      } catch {
+        return replyJson(res, 502, { error: { code: "upstream", message: "tts failed" } });
+      }
     }
     if (path === "/internal/digest") {
       if (!contractorPhone) {

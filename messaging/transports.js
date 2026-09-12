@@ -39,7 +39,7 @@ function ambimail(env) {
     (env.GATEWAY_MAP ?? "")
       .split(",")
       .map((e) => e.trim())
-      .filter(Boolean)
+      .filter((e) => e.includes(":"))
       .map((e) => {
         const [num, domains] = e.split(":");
         const key10 = num.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");

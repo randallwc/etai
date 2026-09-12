@@ -65,10 +65,15 @@ export default function Board({
   const active = sorted.filter((j) => !RESOLVED.has(j.status));
   const resolved = sorted.filter((j) => RESOLVED.has(j.status));
 
+  const enRoute = active.filter((j) => j.status === "en_route");
+  const queue = active.filter((j) => j.status !== "en_route");
+  const upNext = queue.slice(0, 1);
+  const rest = queue.slice(1);
+
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const groups = new Map();
-  for (const job of active) {
+  for (const job of rest) {
     const key = dayKey(job.window.start);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(job);
@@ -76,8 +81,6 @@ export default function Board({
   const sections = [...groups.entries()].sort(([a], [b]) =>
     a.localeCompare(b)
   );
-  for (const [, jobs] of sections)
-    jobs.sort((a, b) => (b.status === "en_route") - (a.status === "en_route"));
 
   const label = (key) =>
     key === dayKey(new Date())
@@ -112,6 +115,18 @@ export default function Board({
         </button>
       ))}
 
+      {enRoute.length > 0 && (
+        <div>
+          <div className="side-label">En route</div>
+          {enRoute.map(row)}
+        </div>
+      )}
+      {upNext.length > 0 && (
+        <div>
+          <div className="side-label">Up next</div>
+          {upNext.map(row)}
+        </div>
+      )}
       {sections.map(([key, jobs]) => (
         <div key={key}>
           <div className="side-label">{label(key)}</div>

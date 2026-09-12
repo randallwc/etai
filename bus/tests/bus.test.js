@@ -41,6 +41,7 @@ before(async () => {
       calendar: { stub: true },
       ambi: { enabled: false, createTask: async () => null },
       ai: { classify: async () => ({ intent: "other" }) },
+      tts: { synthesize: async () => Buffer.from("fake-mp3") },
     },
   ));
   await new Promise((r) => server.listen(0, r));
@@ -98,6 +99,19 @@ test("calendar notification texts the contractor once", async () => {
 test("malformed calendar notification is 400", async () => {
   assert.equal((await post(`${base}/webhooks/calendar`, { kind: "reminder" })).status, 400);
   assert.equal((await post(`${base}/webhooks/calendar`, "not json")).status, 400);
+});
+
+test("tts endpoint returns audio and cors preflight is answered", async () => {
+  const res = await post(`${base}/tts`, { text: "hello" });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type"), /audio\/mpeg/);
+  assert.equal(await res.text(), "fake-mp3");
+
+  const opt = await fetch(`${base}/tts`, { method: "OPTIONS" });
+  assert.equal(opt.status, 204);
+  assert.equal(opt.headers.get("access-control-allow-origin"), "*");
+
+  assert.equal((await post(`${base}/tts`, {})).status, 400);
 });
 
 test("healthz reports wiring", async () => {

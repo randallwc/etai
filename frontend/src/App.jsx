@@ -33,6 +33,23 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [callAgent, setCallAgent] = useState(null);
 
+  const syncCalendar = useCallback(() => {
+    fetchCalendarJobs()
+      .then((r) => {
+        if (!r) return;
+        setBoard((b) => {
+          const next = mergeCalendarJobs(b, r.events, r.contacts);
+          saveBoard(next);
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    syncCalendar();
+  }, [syncCalendar, callAgent]);
+
   useEffect(() => {
     let alive = true;
     async function sync() {

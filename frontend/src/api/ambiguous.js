@@ -81,6 +81,26 @@ export async function fetchDaySummary() {
   return evText + taskText;
 }
 
+/**
+ * Fetch the next two weeks of calendar events plus the CRM contacts the
+ * bus upserts on each booking, so the board can show real clients.
+ * Returns { events, contacts } or null when no API key is set.
+ */
+export async function fetchCalendarJobs() {
+  if (!ambiguousEnabled) return null;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 14);
+  const [eventsRes, contactsRes] = await Promise.all([
+    api(
+      `/calendars/events?start=${start.toISOString()}&end=${end.toISOString()}`
+    ),
+    api("/crm/contacts").catch(() => null),
+  ]);
+  return { events: eventsRes.data ?? [], contacts: contactsRes?.data ?? [] };
+}
+
 export async function createTask(title) {
   if (!ambiguousEnabled) return { mocked: true, title };
   const { task } = await api("/tasks", {

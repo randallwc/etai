@@ -35,7 +35,7 @@ workspace is the calendar of record. A FaceTime-style web app
 
 ## docs
 
-- [Product goal](docs/GOAL.md): the contractor-dispatcher problem, MVP behavior, scope, risks, and demo framing.
+- [Product goal](docs/GOAL.md): the contractor-dispatcher problem, the five-whys rationale, MVP behavior, scope, risks, and demo framing.
 - [Architecture](docs/architecture.txt): how messaging, the router, calendar integration, and call UI exchange data today and where the planned flow differs.
 - [Interfaces](docs/INTERFACES.md): component ownership, shared contracts, build order, and environment-variable registry.
 - [API](docs/API.md): agent endpoints, tools, data model, message flows, Ambiguous mapping, and operational gotchas.
