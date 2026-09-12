@@ -116,12 +116,13 @@ function findSlots(busy, date, durationMinutes, count, timePref, tz = "UTC") {
  * Calendar adapter behind the agent loop. When Ambiguous is enabled it maps
  * the raw client surface (users/calendars/events/busySlots/CRUD) to the
  * loop's needs; with no API key it falls back to an in-memory stub so the
- * whole agent runs offline.
+ * whole agent runs offline. CALENDAR=memory forces the stub even when an
+ * Ambiguous key is present -- the whole stack runs with zero API calls.
  */
 function createCalendar({ ambi, env = process.env } = {}) {
   const client = ambi;
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
-  if (!client?.enabled) return stubCalendar(tz);
+  if (!client?.enabled || env.CALENDAR === "memory") return stubCalendar(tz);
 
   let userId, calendarId;
   async function ids() {
