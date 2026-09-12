@@ -28,3 +28,6 @@ frontend-test:
 
 demo:
 	node scripts/demo.js
+
+chat:
+	node scripts/chat.js

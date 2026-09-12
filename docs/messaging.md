@@ -82,6 +82,13 @@ Local, no hardware: run the service, POST /subscriptions a local URL (or
 run `nc`/any logger), then POST /simulate/inbound and /send. The wire
 shape is identical to the real path -- only the transport differs.
 
+For a two-way conversation use `make chat` (scripts/chat.js): it spawns
+messaging on the sim transport plus the bus wired together, and turns
+your terminal into the phone. Each line you type is a text in; agent
+replies print as they arrive. `/as client` or `/as <e164>` switches
+which side you are texting as. `scripts/demo.js` runs the same wiring
+as a scripted five-step regression instead of interactive input.
+
 Real iMessage (needs a Mac signed into iMessage):
 
   1. Install BlueBubbles server on the Mac; grant Full Disk Access and
