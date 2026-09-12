@@ -55,7 +55,8 @@ CONVENTIONS
   - Commits: one-line heading plus 2-3 sentences; keep them short.
   - Never commit secrets. Keys live in repo-root .env (gitignored);
     services load it via shared/env.js loadEnv() in their entry point.
-    Names in use: AMBIG_API, COPILOT_API, CONTRACT_PHONE, CLIENT_PHONE.
+    Names in use: AMBIG_API, AMBIGUOUS_API_KEY, COPILOT_API,
+    CONTRACT_PHONE, CLIENT_PHONE, BUS_URL (see .env.example).
 
 VERIFIED AMBIGUOUS API (live-tested 2026-09-12, workspace etai-workspace)
 -------------------------------------------------------------------------
