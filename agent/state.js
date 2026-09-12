@@ -9,10 +9,14 @@ const SEEN_CAP = 5000;
  * for memory-only (tests). Shapes follow models/*.schema.json.
  */
 function createStore(file = null) {
-  const data =
-    file && existsSync(file)
-      ? JSON.parse(readFileSync(file, "utf8"))
-      : { seen: [], customers: {}, jobs: {}, threads: {}, actions: [] };
+  const data = {
+    seen: [],
+    customers: {},
+    jobs: {},
+    threads: {},
+    actions: [],
+    ...(file && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {}),
+  };
 
   function save() {
     if (file) writeFileSync(file, JSON.stringify(data, null, 1));

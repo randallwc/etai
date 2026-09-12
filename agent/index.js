@@ -90,8 +90,26 @@ function createAgentServer(env = process.env, overrides = {}) {
         return replyJson(res, 202, { accepted: false, duplicate: true });
       }
       replyJson(res, 202, { accepted: true });
-      loop.handle(body).catch((e) => console.error(`loop error: ${e.message}`));
+      loop.handle(body).catch((e) => console.error(`loop error: ${e.stack}`));
       return;
+    }
+    if (path === "/voice/turn") {
+      if (!/^\+[1-9]\d{6,14}$/.test(body.from ?? "") || typeof body.body !== "string" || !body.body) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "need from (E.164) and body" } });
+      }
+      const msg = {
+        channel: "voice",
+        from: body.from,
+        body: body.body,
+        threadKey: body.threadKey ?? body.from,
+        externalId: body.externalId ?? `voice-${randomUUID()}`,
+        receivedAt: new Date().toISOString(),
+      };
+      if (!store.dedup(msg.externalId)) {
+        return replyJson(res, 200, { reply: "", duplicate: true });
+      }
+      const reply = await loop.handle(msg);
+      return replyJson(res, 200, { reply: reply ?? "" });
     }
     if (path === "/internal/digest") {
       if (!contractorPhone) {
