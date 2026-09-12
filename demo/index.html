@@ -182,6 +182,16 @@
         box-shadow: 0 22px 42px rgba(16, 22, 41, .2);
         object-fit: contain;
       }
+      .calendar-invite { padding: 26px; }
+      .calendar-invite.active { display: grid; place-items: center; }
+      .calendar-screenshot {
+        display: block;
+        width: min(555px, 58vw);
+        max-height: calc(100vh - 52px);
+        border-radius: 10px;
+        box-shadow: 0 22px 52px rgba(0, 0, 0, .35);
+        object-fit: contain;
+      }
 
       .callout {
         padding: clamp(21px, 3vw, 42px);
@@ -296,7 +306,7 @@
   </head>
   <body>
     <main class="deck" aria-live="polite">
-      <section class="slide dark active" aria-label="Slide 1 of 9">
+      <section class="slide dark active" aria-label="Slide 1 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="cover-layout">
           <p class="eyebrow">Hackathon demo</p>
@@ -307,7 +317,7 @@
         <p class="caption">Use ← → keys or the controls to navigate</p>
       </section>
 
-      <section class="slide" aria-label="Slide 2 of 9">
+      <section class="slide" aria-label="Slide 2 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="two-column">
           <div class="problem-side warm">
@@ -324,7 +334,7 @@
         <p class="caption">The interface problem: both sides already reach for their phone</p>
       </section>
 
-      <section class="slide" aria-label="Slide 3 of 9">
+      <section class="slide" aria-label="Slide 3 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
           <div>
@@ -340,7 +350,11 @@
         </div>
       </section>
 
-      <section class="slide" aria-label="Slide 4 of 9">
+      <section class="slide dark calendar-invite" aria-label="Slide 4 of 10: New calendar invite">
+        <img class="calendar-screenshot" src="assets/calendar-invite.png" alt="New electrician appointment in the Ambiguous calendar" data-owner="ETAi hackathon team" data-reason="Real calendar-invite evidence for slide 4">
+      </section>
+
+      <section class="slide" aria-label="Slide 5 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
           <div class="phone" aria-label="Example electrician delay update">
@@ -357,7 +371,7 @@
         </div>
       </section>
 
-      <section class="slide" aria-label="Slide 5 of 9">
+      <section class="slide" aria-label="Slide 6 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <p class="eyebrow">Why this environment matters</p>
         <h2>Phone calls and texts are where the scheduling problem already happens.</h2>
@@ -374,7 +388,7 @@
         <div class="callout"><p>ETAi uses the phone as the product surface and Ambiguous as the shared calendar system of record.</p></div>
       </section>
 
-      <section class="slide" aria-label="Slide 6 of 9">
+      <section class="slide" aria-label="Slide 7 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <p class="eyebrow">Technical credibility</p>
         <h2>One scheduling brain connects messages to the Ambiguous calendar.</h2>
@@ -390,7 +404,7 @@
         <p class="flow-detail">Replies travel back through the messaging layer. Availability is checked before ETAi proposes a time. ETAi records a confirmed appointment only after the client selects a slot.</p>
       </section>
 
-      <section class="slide" aria-label="Slide 7 of 9">
+      <section class="slide" aria-label="Slide 8 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <p class="eyebrow">Implementation stack</p>
         <h2>Tools that power ETAi</h2>
@@ -401,7 +415,7 @@
         </div>
       </section>
 
-      <section class="slide dark" aria-label="Slide 8 of 9">
+      <section class="slide dark" aria-label="Slide 9 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="close-layout">
           <p class="eyebrow">Outcome</p>
@@ -411,7 +425,7 @@
         <p class="caption">ETAi Hackathon Demo</p>
       </section>
 
-      <section class="slide" aria-label="Slide 9 of 9">
+      <section class="slide" aria-label="Slide 10 of 10">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="team-layout">
           <p class="eyebrow">The team</p>
@@ -445,7 +459,7 @@
 
     <nav class="controls" aria-label="Presentation navigation">
       <button type="button" id="previous" aria-label="Previous slide">‹</button>
-      <span id="status" aria-live="polite">1 / 9</span>
+      <span id="status" aria-live="polite">1 / 10</span>
       <button type="button" id="next" aria-label="Next slide">›</button>
     </nav>
 
