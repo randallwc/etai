@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { createAgentServer } = require("../index.js");
+const { createBusServer } = require("../index.js");
 const { stubCalendar, resolveDayRef } = require("../calendar.js");
 const { createAi } = require("../ai.js");
 const { createStore } = require("../state.js");
@@ -25,7 +25,7 @@ function fakeIntent(body) {
 async function serve(extraEnv = {}) {
   const sent = [];
   const calendar = stubCalendar();
-  const { server, store } = createAgentServer(
+  const { server, store } = createBusServer(
     { CONTRACT_PHONE: CONTRACTOR, CONTRACTOR_TZ: "UTC", ...extraEnv },
     {
       ai: { classify: async (b) => fakeIntent(b) },

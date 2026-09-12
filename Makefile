@@ -1,6 +1,6 @@
-PARTS := messaging agent calendar-agent shared models
+PARTS := messaging bus calendar-agent shared models
 
-.PHONY: test $(PARTS) run-messaging run-agent frontend-install frontend-dev frontend-build frontend-test demo
+.PHONY: test $(PARTS) run-messaging run-bus frontend-install frontend-dev frontend-build frontend-test demo
 
 test:
 	npm test
@@ -11,8 +11,8 @@ $(PARTS):
 run-messaging:
 	$(MAKE) -C messaging run
 
-run-agent:
-	$(MAKE) -C agent run
+run-bus:
+	$(MAKE) -C bus run
 
 frontend-install:
 	$(MAKE) -C frontend install

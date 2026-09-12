@@ -21,7 +21,7 @@ workspace is the calendar of record. A FaceTime-style web app
 ## layout
 
 - `messaging/`: messaging service (iMessage/SMS in and out)
-- `agent/`: the scheduling brain; answers texts via Ambiguous
+- `bus/`: the scheduling brain; answers texts via Ambiguous
 - `calendar-agent/`: Ambiguous Assistant chat smoke script
 - `frontend/`: the call-your-agent web app
 - `shared/`: zero-dep helpers shared across services
@@ -37,7 +37,7 @@ workspace is the calendar of record. A FaceTime-style web app
 - [API](docs/API.md): agent endpoints, tools, data model, message flows, Ambiguous mapping, and operational gotchas.
 - [Calendar contract](docs/CALENDAR.md): availability and event CRUD contract, errors, conformance checks, and calendar-provider options.
 - [Phone contract](docs/PHONE.md): normalized inbound-message and outbound-send boundary shared by messaging consumers.
-- [Agent service](docs/agent.md): agent-core modules, HTTP routes, intent handling, state, and voice-turn behavior.
+- [Bus service](docs/bus.md): bus-core modules, HTTP routes, intent handling, state, and voice-turn behavior.
 - [Messaging service](docs/messaging.md): running the phone service, transports, subscriptions, mail polling, configuration, and iMessage caveats.
 - [Messaging behavior](docs/MESSAGING_GOAL.md): client, contractor, and time-triggered flows, notification rules, and the seeded demo sequence.
 - [Messaging integration plan](docs/messaging-plan.md): verified real-SMS path, one-brain routing rule, remaining tasks, and field-tested gotchas.
@@ -56,5 +56,5 @@ workspace is the calendar of record. A FaceTime-style web app
 ```bash
 cd frontend && npm install && npm run dev   # see docs/frontend.md
 node messaging/index.js                     # see docs/messaging.md
-node agent/index.js                         # see docs/agent.md
+node bus/index.js                         # see docs/bus.md
 ```

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { createAgentServer } = require("../index.js");
+const { createBusServer } = require("../index.js");
 const { stubCalendar } = require("../calendar.js");
 
 const CONTRACTOR = "+15550001111";
@@ -10,7 +10,7 @@ async function serve({ upsertContact }) {
   const sent = [];
   const calls = [];
   const calendar = stubCalendar();
-  const { server, store } = createAgentServer(
+  const { server, store } = createBusServer(
     { CONTRACT_PHONE: CONTRACTOR, CONTRACTOR_TZ: "UTC" },
     {
       ambi: {
@@ -102,7 +102,7 @@ test("an unknown-name client still syncs to the CRM keyed by phone", async () =>
   const sent = [];
   const calls = [];
   const calendar = stubCalendar();
-  const { server } = createAgentServer(
+  const { server } = createBusServer(
     { CONTRACT_PHONE: CONTRACTOR, CONTRACTOR_TZ: "UTC" },
     {
       ambi: {

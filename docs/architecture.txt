@@ -39,23 +39,26 @@ PARTS
        run details in docs/messaging.md.
 
    bus
-       The central router -- the "agent service" in
-       docs/INTERFACES.md and docs/API.md. Everything crosses
-       it; nothing talks point to point.
+       The central router and scheduling brain -- the "agent
+       service" in docs/INTERFACES.md and docs/API.md.
+       Everything crosses it; nothing talks point to point.
+       The old agent/ service was merged into bus/ on
+       2026-09-13; they were the same component.
 
-       For now the bus is a plain forwarder. It exposes
-       POST /webhooks/inbound, which msg fans out to, and
-       forwards the normalized message to the calendar side.
-       Replies and notifications come back the other way: the
-       bus POSTs to msg's /send.
+       Inbound: POST /webhooks/inbound receives normalized
+       messages from msg, classifies intent via Ambiguous
+       assistant/chat (bus/ai.js), runs the scheduling loop
+       (bus/loop.js) against the calendar adapter
+       (bus/calendar.js -> bus/ambiguous.js), and replies via
+       msg's /send. Per-thread state, dedup, jobs, and the
+       action log live in bus/state.js; pre-job heads-up texts
+       in bus/reminders.js. Also exposes POST /voice/turn
+       (synchronous {reply}), /internal/digest, and
+       /internal/client-update. Contract: docs/bus.md.
 
-       The same component will grow the agent loop described in
-       docs/API.md (find customer, check availability, book,
-       notify). Forwarding first, intelligence second -- the
-       cal AI already understands prose, so a dumb pipe is
-       genuinely useful on day one. Later the bus earns its
-       keep by summarizing, enriching with weather and travel
-       time, and fanning a message out to both msg and cal.
+       Calendar notifications: POST /webhooks/calendar takes
+       the feed from calendar-agent/notify.js and texts the
+       contractor. Dedup on notification id.
 
    cal
        The calendar side has two layers.
@@ -68,13 +71,13 @@ PARTS
 
        The brain: Ambiguous AI's workspace is the system of
        record (events, CRM, tasks, documents) and its Assistant
-       is the cal AI we lean on. calendar-agent/test.js shows
-       the pattern: POST /api/assistant/chat with a natural
-       language task, and the Assistant decides which calendar
-       tools to call. All natural-language interpretation and
-       scheduling decisions live on this side. The bus does not
-       parse intent; if a message needs understanding it goes
-       to cal.
+       classifies intent for the bus. calendar-agent/test.js
+       shows the pattern: POST /api/assistant/chat with a
+       natural language task, and the Assistant decides which
+       calendar tools to call. The bus asks the Assistant for a
+       JSON intent per message and runs the scheduling loop
+       itself (bus/loop.js); the calendar CRUD goes through
+       bus/ambiguous.js.
 
    ui
        The video calling platform in frontend/. Today it talks
@@ -100,12 +103,20 @@ DATA FLOW
              -> BlueBubbles webhook -> msg
              -> normalize -> dedup -> fanout
              -> POST {UPSTREAM_URL}/webhooks/inbound   (bus)
-             -> cal AI                               (cal)
+             -> intent classify -> Ambiguous assistant/chat
+             -> scheduling loop -> Ambiguous calendar CRUD
+             -> reply via msg /send
 
        Outbound:
 
-           bus -> POST {PHONE_SERVICE_URL}/send -> msg
+           bus -> POST {MESSAGING_URL}/send -> msg
              -> transport -> client/contractor phone
+
+       Calendar notifications:
+
+           calendar-agent/notify.js
+             -> POST {BUS_URL}/webhooks/calendar
+             -> dedup -> contractor text via msg /send
 
        Video, as built today (bus bypassed):
 
@@ -130,8 +141,9 @@ GOTCHAS
        but the plan is ui -> bus -> cal so there is one place
        to audit and enrich.
 
-       The bus is called the "agent service" everywhere else in
-       docs/. Same component, two names.
+       The bus is called the "agent service" in some older
+       docs. Same component, two names -- and since 2026-09-13
+       the agent/ directory literally lives inside bus/.
 
        The Assistant chat endpoint is contested ground:
        docs/calendar-agent.md and calendar-agent/test.js call
@@ -141,20 +153,19 @@ GOTCHAS
        instead. Verify against the workspace before building on
        either -- the spec, not the docs, is the truth.
 
-       Scheduling intelligence lives in cal, not the bus. A bus
-       that parses intent becomes a second agent and the two
-       will disagree. Keep the bus dumb about meaning; smart
-       about routing and enrichment only.
+       Exactly one brain subscribes to messaging's fanout.
+       The bus is that brain. Anything else that also answers
+       inbound texts produces double replies.
 
        Dedup is best-effort everywhere: msg dedups externalId
        in memory (a restart re-accepts once), so the bus should
        dedup too.
 
 TRIED APPROACHES
-       Smart bus from day one: rejected. Letting the bus parse
-       intent duplicates the cal AI and gives two sources of
-       scheduling truth. The plain forwarder keeps one agent in
-       charge while we learn what enrichment the bus needs.
+       Separate agent/ and bus/ services: tried, then merged.
+       Two processes both consuming inbound meant duplicate
+       subscriptions and two sources of scheduling truth. The
+       loop and the router are one component now.
 
        Direct msg -> cal connection: rejected. It saves a hop
        now but means notifications, video prose, and future
@@ -168,8 +179,9 @@ TRIED APPROACHES
 
 SEE ALSO
        docs/INTERFACES.md -- component ownership and env vars.
-       docs/API.md        -- the agent service's endpoints and
+       docs/API.md        -- the bus service's endpoints and
                              tools.
+       docs/bus.md        -- running the bus service.
        docs/CALENDAR.md   -- the calendar contract.
        docs/PHONE.md      -- the messaging contract.
        docs/messaging.md  -- running the messaging service.

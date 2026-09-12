@@ -1,9 +1,9 @@
 MESSAGING GOAL -- triggers and who gets messaged
 ================================================
 
-Read this before touching agent/ or messaging/. It defines the three
+Read this before touching bus/ or messaging/. It defines the three
 trigger sources, what each does, and who gets texted. The wire contract
-stays docs/PHONE.md; the loop internals are docs/agent.md. This file is
+stays docs/PHONE.md; the loop internals are docs/bus.md. This file is
 the behavior spec other agents build against.
 
 DEMO DATA
@@ -54,7 +54,7 @@ THE THREE TRIGGER SOURCES
    workspace (parts to order, callbacks). Client "other" texts get a
    help line, never a task.
 
-3. TIME trigger -- the clock, via agent/reminders.js (60s tick) and
+3. TIME trigger -- the clock, via bus/reminders.js (60s tick) and
    /internal/digest.
 
    - REMINDER_LEAD_MINUTES before each confirmed job -> text contractor
@@ -94,6 +94,6 @@ DEMO SEQUENCE (seeded data)
      client gets new ETA.
   3. Contractor texts "cancel the next one" -> client gets cancel +
      rebook offer; freed slot becomes an open spot offer.
-  4. curl -X POST :4030/internal/digest -> contractor gets the day route.
+  4. curl -X POST :4010/internal/digest -> contractor gets the day route.
   5. Wait for a seeded job inside REMINDER_LEAD_MINUTES -> contractor
      gets the heads-up text automatically.

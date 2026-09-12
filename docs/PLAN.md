@@ -1,7 +1,7 @@
 PLAN -- local messaging integration
 ====================================
 
-Read with docs/MESSAGING_GOAL.md (the behavior spec), docs/agent.md
+Read with docs/MESSAGING_GOAL.md (the behavior spec), docs/bus.md
 (the brain), docs/messaging.md (transports). This file is the punch
 list for wiring the remaining pieces into one working text-in /
 calendar-action / text-out loop on real phones.
@@ -27,7 +27,7 @@ WHAT WORKS TODAY (verified live)
     email.received is registered to POST /webhooks/ambimail (https URL
     required -- a pinggy/cloudflared tunnel to messaging works). The
     poller needs no public URL and is the reliable demo path.
-  - Time triggers exist in two places: agent/reminders.js (per-job
+  - Time triggers exist in two places: bus/reminders.js (per-job
     heads-up to contractor) and calendar-agent/notify.js ->
     bus/webhooks/calendar (Ambiguous's own reminder feed -> contractor
     text).
@@ -37,16 +37,15 @@ WHAT WORKS TODAY (verified live)
 THE ONE-BRAIN RULE (integration decision)
 -----------------------------------------
 
-bus/ and agent/ both accept POST /webhooks/inbound. bus forwards raw
-text to assistant/chat and replies; agent runs the real loop. If BOTH
-are subscribed to messaging, every text gets two answers. Rule:
+bus/ is the only inbound consumer: the old agent/ service was merged
+into it (2026-09-13). It owns /webhooks/inbound (the real loop) and
+/webhooks/calendar (calendar-agent/notify.js -> contractor text). If a
+second consumer ever subscribes to messaging, every text gets two
+answers. Rule:
 
-  - messaging /subscriptions -> agent ONLY. The agent is the brain.
-  - bus/webhooks/calendar stays -- calendar-agent/notify.js POSTs
-    there directly (not via subscription), and bus just texts the
-    contractor. bus must NOT be registered as an inbound subscriber.
-  - If we keep bus' /webhooks/inbound for demos, it is dead code on
-    the live path -- do not subscribe it.
+  - messaging /subscriptions -> bus ONLY. The bus is the brain.
+  - calendar-agent/notify.js POSTs /webhooks/calendar directly (not
+    via subscription).
 
 REMAINING WORK, IN ORDER
 ------------------------
@@ -63,11 +62,11 @@ REMAINING WORK, IN ORDER
    "reschedule". Spec exists; loop.js needs the offer step.
 4. Calendar-notification -> client: bus/webhooks/calendar currently
    texts the contractor only. For reschedule offers it should hand the
-   notification to the agent (loop.clientUpdate exists) so the right
-   client gets offered new times -- or let agent poll the same feed.
+   notification to the bus loop (loop.clientUpdate exists) so the
+   client gets offered new times.
    Decide ONE owner; do not double-notify.
 5. Startup checklist (demo): messaging :4020 (ambimail + mailpoller),
-   agent :4030 subscribed, bus :4010 optional, calendar-agent notify
+   bus :4010 subscribed, calendar-agent notify
    optional, seed-calendar run. All load .env via shared/env.js.
 6. iMessage remains BlueBubbles-on-a-Mac; everything above works over
    SMS-grade texts today.

@@ -1,68 +1,52 @@
 const http = require("node:http");
+const { join } = require("node:path");
+const { randomUUID } = require("node:crypto");
+const { createAmbiguous } = require("./ambiguous.js");
+const { createCalendar } = require("./calendar.js");
+const { createAi } = require("./ai.js");
+const { createStore } = require("./state.js");
+const { createLoop } = require("./loop.js");
+const { startReminders } = require("./reminders.js");
 
-const SEEN_CAP = 5000;
-const FALLBACK = "Sorry, I couldn't reach the calendar. Try again in a minute.";
+const REQUIRED_INBOUND = ["channel", "from", "body", "externalId", "receivedAt", "threadKey"];
 
-function createBusServer(env = process.env) {
-  const base = (env.AMBIGUOUS_BASE_URL ?? "https://app.ambiguous.ai").replace(/\/$/, "");
-  const apiKey = env.AMBIG_API ?? env.AMBIGUOUS_API_KEY;
+function createBusServer(env = process.env, overrides = {}) {
+  const ambi = overrides.ambi ?? createAmbiguous(env);
+  const calendar = overrides.calendar ?? createCalendar({ ambi, env });
+  const ai = overrides.ai ?? createAi({ chat: (m) => ambi.assistantChat(m), env });
+  const store = overrides.store ?? createStore(env.STATE_FILE ?? null);
   const messagingUrl = env.MESSAGING_URL?.replace(/\/$/, "");
   const contractorPhone = env.CONTRACT_PHONE ?? env.CONTRACTOR_PHONE;
-  const tz = env.CONTRACTOR_TZ;
-  const seen = new Set();
+  const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
 
-  function dedup(externalId) {
-    if (seen.has(externalId)) return false;
-    if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
-    seen.add(externalId);
-    return true;
-  }
-
-  async function reply(to, body, threadKey) {
-    if (!messagingUrl) return console.log(`[bus] -> ${to}: ${body}`);
-    try {
+  const notify =
+    overrides.notify ??
+    (async ({ to, body }) => {
+      if (!messagingUrl) {
+        const externalId = `local-${randomUUID()}`;
+        console.log(`[bus] notify -> ${to}: ${body}`);
+        return { externalId };
+      }
       const res = await fetch(`${messagingUrl}/send`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ to, body, threadKey }),
+        body: JSON.stringify({ to, body, threadKey: to }),
       });
+      if (!res.ok) throw new Error(`messaging /send -> ${res.status}`);
       console.log(`[bus] sent to ${to} via messaging (${res.status})`);
-    } catch (e) {
-      console.error(`[bus] send to messaging failed: ${e.message}`);
-    }
-  }
-
-  async function askCalendar(text) {
-    console.log(`[bus] asking calendar at ${base}`);
-    const res = await fetch(`${base}/api/assistant/chat`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        "API-Version": "1",
-      },
-      body: JSON.stringify({ message: text, context: { audience: "agent" } }),
-      signal: AbortSignal.timeout(60000),
+      return res.json();
     });
-    console.log(`[bus] calendar responded ${res.status}`);
-    const raw = await res.text().catch(() => "");
-    console.log(`[bus] body read, ${raw.length} bytes`);
-    let data = null;
-    try {
-      data = JSON.parse(raw);
-    } catch {}
-    if (!res.ok || data?.status === "error" || typeof data?.response !== "string") {
-      throw new Error(`assistant chat failed (${res.status})`);
-    }
-    return data.response;
-  }
+
+  const loop =
+    overrides.loop ??
+    createLoop({ calendar, ai, store, notify, createTask: (t) => ambi.createTask(t), upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null, contractorPhone, tz });
 
   function fmtWhen(iso) {
     if (!iso) return "soon";
     return new Date(iso).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
-      ...(tz ? { timeZone: tz } : {}),
+      timeZone: tz,
     });
   }
 
@@ -70,21 +54,7 @@ function createBusServer(env = process.env) {
     const label = n.kind === "reminder" ? "Reminder" : `Calendar ${n.kind ?? "update"}`;
     const text = `${label}: ${n.title} at ${fmtWhen(n.startAt ?? n.triggerAt)}`;
     if (!contractorPhone) return console.log(`[bus] ${text} (CONTRACT_PHONE unset)`);
-    await reply(contractorPhone, text, contractorPhone);
-  }
-
-  async function forward(message) {
-    console.log(`[bus] forwarding "${message.body}" from ${message.from}`);
-    let answer = FALLBACK;
-    if (apiKey) {
-      try {
-        answer = await askCalendar(message.body);
-      } catch (e) {
-        console.error(`[bus] calendar ai failed: ${e.message}`);
-      }
-    }
-    console.log(`[bus] replying to ${message.from}`);
-    await reply(message.from, answer, message.threadKey ?? message.from);
+    await notify({ to: contractorPhone, body: text });
   }
 
   function readBody(req) {
@@ -102,69 +72,134 @@ function createBusServer(env = process.env) {
     });
   }
 
-  function respond(res, status, payload) {
+  function replyJson(res, status, payload) {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(payload ?? {}));
   }
 
+  function validInbound(body) {
+    return (
+      REQUIRED_INBOUND.every((k) => body[k] != null && body[k] !== "") &&
+      /^\+[1-9]\d{6,14}$/.test(body.from) &&
+      typeof body.body === "string"
+    );
+  }
+
   async function handle(req, res) {
-    const { pathname } = new URL(req.url, "http://localhost");
-    if (req.method === "GET" && pathname === "/healthz") {
-      return respond(res, 200, {
+    const path = new URL(req.url, "http://localhost").pathname;
+    if (req.method === "GET" && path === "/healthz") {
+      return replyJson(res, 200, {
         ok: true,
-        calendar: Boolean(apiKey),
-        messaging: messagingUrl ?? null,
+        stub: calendar.stub ?? false,
+        ambiguous: ambi.enabled,
+        messaging: Boolean(messagingUrl),
       });
     }
-    if (
-      req.method !== "POST" ||
-      (pathname !== "/webhooks/inbound" && pathname !== "/webhooks/calendar")
-    ) {
-      return respond(res, 404, { error: { code: "invalid", message: "not found" } });
+    if (req.method !== "POST") {
+      return replyJson(res, 404, { error: { code: "invalid", message: "not found" } });
     }
     const body = await readBody(req).catch(() => null);
     if (body === null) {
-      return respond(res, 400, { error: { code: "invalid", message: "body must be json" } });
+      return replyJson(res, 400, { error: { code: "invalid", message: "body must be json" } });
     }
-    if (pathname === "/webhooks/calendar") {
+    if (path === "/webhooks/inbound") {
+      if (!validInbound(body)) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "missing required inbound fields" } });
+      }
+      if (!store.dedup(body.externalId)) {
+        return replyJson(res, 202, { accepted: false, duplicate: true });
+      }
+      replyJson(res, 202, { accepted: true });
+      loop.handle(body).catch((e) => console.error(`loop error: ${e.stack}`));
+      return;
+    }
+    if (path === "/webhooks/calendar") {
       if (typeof body.id !== "string" || !body.id || typeof body.title !== "string" || !body.title) {
-        return respond(res, 400, { error: { code: "invalid", message: "id and title required" } });
+        return replyJson(res, 400, { error: { code: "invalid", message: "id and title required" } });
       }
-      if (!dedup(`cal:${body.id}`)) {
-        return respond(res, 202, { accepted: false });
+      if (!store.dedup(`cal:${body.id}`)) {
+        return replyJson(res, 202, { accepted: false, duplicate: true });
       }
-      respond(res, 202, { accepted: true });
+      replyJson(res, 202, { accepted: true });
       notifyContractor(body).catch((e) => console.error(`[bus] calendar notify failed: ${e.message}`));
       return;
     }
-    if (
-      typeof body.body !== "string" || !body.body ||
-      typeof body.from !== "string" || !body.from ||
-      typeof body.externalId !== "string" || !body.externalId
-    ) {
-      return respond(res, 400, { error: { code: "invalid", message: "from, body, externalId required" } });
+    if (path === "/voice/turn") {
+      if (!/^\+[1-9]\d{6,14}$/.test(body.from ?? "") || typeof body.body !== "string" || !body.body) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "need from (E.164) and body" } });
+      }
+      const msg = {
+        channel: "voice",
+        from: body.from,
+        body: body.body,
+        threadKey: body.threadKey ?? body.from,
+        externalId: body.externalId ?? `voice-${randomUUID()}`,
+        receivedAt: new Date().toISOString(),
+      };
+      if (!store.dedup(msg.externalId)) {
+        return replyJson(res, 200, { reply: "", duplicate: true });
+      }
+      const reply = await loop.handle(msg);
+      return replyJson(res, 200, { reply: reply ?? "" });
     }
-    if (!dedup(body.externalId)) {
-      return respond(res, 202, { accepted: false });
+    if (path === "/internal/digest") {
+      if (!contractorPhone) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "CONTRACT_PHONE not set" } });
+      }
+      const text = await loop.digest();
+      await notify({ to: contractorPhone, body: text });
+      return replyJson(res, 200, { sent: true, text });
     }
-    respond(res, 202, { accepted: true });
-    forward(body).catch((e) => console.error(`[bus] forward failed: ${e.message}`));
+    if (path === "/internal/client-update") {
+      const result = await loop.clientUpdate(body.phone);
+      if (body.phone && !result.sent) {
+        return replyJson(res, 400, { error: { code: "invalid", message: "no job for that phone" } });
+      }
+      return replyJson(res, 200, result);
+    }
+    return replyJson(res, 404, { error: { code: "invalid", message: "not found" } });
   }
 
   const server = http.createServer((req, res) => {
     handle(req, res).catch((e) => {
       console.error(e);
-      respond(res, 500, { error: { code: "upstream", message: "internal error" } });
+      replyJson(res, 500, { error: { code: "upstream", message: "internal error" } });
     });
   });
-  return { server, seen };
+
+  async function subscribe() {
+    const publicUrl = env.PUBLIC_URL?.replace(/\/$/, "");
+    if (!messagingUrl || !publicUrl) return;
+    const url = `${publicUrl}/webhooks/inbound`;
+    await fetch(`${messagingUrl}/subscriptions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    }).catch((e) => console.error(`subscribe failed: ${e.message}`));
+  }
+
+  return { server, loop, store, notify, subscribe, calendar };
 }
 
 if (require.main === module) {
   require("../shared/env.js").loadEnv();
-  const port = Number(process.env.PORT ?? 4010);
-  const { server } = createBusServer();
-  server.listen(port, () => console.log(`bus listening on :${port}`));
+  const env = {
+    ...process.env,
+    STATE_FILE: process.env.STATE_FILE ?? join(__dirname, ".state.json"),
+  };
+  const port = Number(env.PORT ?? 4010);
+  const { server, store, notify, subscribe } = createBusServer(env);
+  server.listen(port, async () => {
+    console.log(`bus listening on :${port}`);
+    await subscribe();
+  });
+  startReminders({
+    store,
+    notify,
+    contractorPhone: env.CONTRACT_PHONE,
+    tz: env.CONTRACTOR_TZ ?? "America/Los_Angeles",
+    leadMinutes: Number(env.REMINDER_LEAD_MINUTES ?? 30),
+  });
 }
 
-module.exports = { createBusServer, FALLBACK };
+module.exports = { createBusServer };

@@ -27,10 +27,10 @@ Done and tested:
   - Data-model schemas for the agent core now committed under models/
     (contractor, customer, job, agent-action, message) -- schema-first
     per AGENT.md before any agent code lands.
-  - agent/ service LANDED 2026-09-12: inbound intake, per-thread state,
+  - bus/ service LANDED 2026-09-12: inbound intake, per-thread state,
     assistant/chat intent classification, the four flows, counterparty
     notifications, reminders tick, digest, and the /voice/turn seam.
-    See docs/agent.md for what shipped; the items below stay as the
+    See docs/bus.md for what shipped; the items below stay as the
     record of why it is shaped the way it is.
 
 The remaining gap: real INBOUND transport. Everything between "a text
@@ -41,15 +41,15 @@ LoopMessage/Twilio). Voice calls ride the same loop via /voice/turn.
 THE SHAPE OF THE THING
 ----------------------
 
-One new top-level component: agent/. Plain Node, CommonJS, zero
+One new top-level component: bus/. Plain Node, CommonJS, zero
 dependencies -- same conventions as messaging/. It sits behind the
 messaging service and never sees a transport.
 
-    iMessage/SMS --> messaging/ --POST--> agent/ --POST /send--> messaging/
+    iMessage/SMS --> messaging/ --POST--> bus/ --POST /send--> messaging/
 
 The agent service does not replace the calendar-service contract in
 docs/CALENDAR.md; it calls the Ambiguous workspace REST API directly
-through its own thin client (agent/ambiguous.js -- the backend mirror of
+through its own thin client (bus/ambiguous.js -- the backend mirror of
 the frontend's src/api/ambiguous.js boundary rule). Rationale: the
 calendar "team" shipped only a stale assistant-chat script, standing up
 a second HTTP hop buys nothing at hackathon scale, and the verified
@@ -59,7 +59,7 @@ for the TimeWindow/CalendarEvent shapes the agent uses internally.
 WORK ITEMS, IN ORDER
 --------------------
 
-1. agent/ skeleton and intake.
+1. bus/ skeleton and intake.
 
    POST /webhooks/inbound (the subscription target messaging/ fans out
    to): validate against phone-contract.inboundMessage, dedup on
@@ -95,7 +95,7 @@ WORK ITEMS, IN ORDER
    the same tools. Do not lead with the LLM; a regex that always works
    beats a model that mostly works in a 4-minute demo.
 
-   Tools per docs/API.md, thin wrappers over agent/ambiguous.js:
+   Tools per docs/API.md, thin wrappers over bus/ambiguous.js:
    get_availability, book_job, reschedule_job, cancel_job,
    get_schedule, find_customer, upsert_customer, notify, report_delay.
    Every tool call lands in the AgentAction log; tool failure becomes a
@@ -155,18 +155,18 @@ WORK ITEMS, IN ORDER
    in {from, body}, out {reply} to speak. The caller's reply is spoken,
    not texted; counterparty notifications still go out over messaging.
    A Vapi tool-call or the frontend JS both map onto it. Contract in
-   docs/agent.md.
+   docs/bus.md.
 
 DECISIONS AND WHY
 -----------------
 
 Agent calls Ambiguous directly. A separate calendar service is the
 INTERFACES.md ideal; at hackathon scale it is a hop with no second
-implementer. If a calendar service ever lands, agent/ambiguous.js is
+implementer. If a calendar service ever lands, bus/ambiguous.js is
 the only file that changes.
 
 Deterministic intents before LLM -- revised in place. The shipped
-classifier is Ambiguous assistant/chat asked for a JSON intent (agent/
+classifier is Ambiguous assistant/chat asked for a JSON intent (bus/
 ai.js); it always returns a valid shape because failures fall back to
 {intent:"other"}. The regex layer turned out unnecessary once
 assistant/chat proved live and fast, and one path is simpler than two.
@@ -187,7 +187,7 @@ book in one round-trip and still read like a person texting.
 ENV REGISTRY (agent service, as shipped)
 ----------------------------------------
 
-  PORT                  where it listens (default 4030)
+  PORT                  where it listens (default 4010)
   PUBLIC_URL            its reachable URL, used for the subscription
   MESSAGING_URL         the messaging service (== PHONE_SERVICE_URL)
   AMBIG_API             ak_ key for etai-workspace (unset -> stub)
@@ -200,11 +200,11 @@ VERIFYING
 ---------
 
 Root `npm test` on every commit (the .githooks hook). New agent tests go
-in agent/tests/*.test.js to match the glob. Contract-critical paths get
+in bus/tests/*.test.js to match the glob. Contract-critical paths get
 tested: inbound dedup, intent classification of the demo phrases, slot
 proposal, job status transitions, the send-validation boundary.
 
-End to end without hardware: run messaging/ (sim transport), run agent/
+End to end without hardware: run messaging/ (sim transport), run bus/
 with UPSTREAM_URL-style subscription, POST /simulate/inbound a demo
 phrase, watch the reply arrive via the sim transport's stdout and the
 event land in the Ambiguous web UI.
@@ -216,7 +216,7 @@ OPEN QUESTIONS
 --------------
 
   - RESOLVED: assistant/chat is live and is the intent classifier
-    (agent/ai.js). It answers wrapped JSON reliably; failures fall back
+    (bus/ai.js). It answers wrapped JSON reliably; failures fall back
     to {intent:"other"}. notify() and thread state stayed ours.
   - Whether the commit hook should also run the frontend suite -- it
     currently does not (core.hooksPath=.githooks runs only root

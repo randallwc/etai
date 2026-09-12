@@ -16,7 +16,7 @@ const CONTRACTOR = toE164(process.env.CONTRACT_PHONE ?? "15550100001");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const children = [];
-const logs = { messaging: [], agent: [] };
+const logs = { messaging: [], bus: [] };
 const stateFile = join(tmpdir(), `etai-demo-${process.pid}.json`);
 let cleaned = false;
 
@@ -117,7 +117,7 @@ async function main() {
   const mPort = await freePort();
   const aPort = await freePort();
   const msgUrl = `http://127.0.0.1:${mPort}`;
-  const agentUrl = `http://127.0.0.1:${aPort}`;
+  const busUrl = `http://127.0.0.1:${aPort}`;
   const outbox = [];
 
   const messaging = spawn(process.execPath, [join(ROOT, "messaging", "index.js")], {
@@ -139,27 +139,27 @@ async function main() {
     }
   });
 
-  const agentEnv = {
+  const busEnv = {
     ...process.env,
     PORT: String(aPort),
     MESSAGING_URL: msgUrl,
-    PUBLIC_URL: agentUrl,
+    PUBLIC_URL: busUrl,
     CONTRACT_PHONE: CONTRACTOR,
     STATE_FILE: stateFile,
   };
-  const agent = spawn(process.execPath, [join(ROOT, "agent", "index.js")], { env: agentEnv });
-  children.push(agent);
-  watch(agent, "agent");
+  const bus = spawn(process.execPath, [join(ROOT, "bus", "index.js")], { env: busEnv });
+  children.push(bus);
+  watch(bus, "bus");
 
-  console.log(`messaging :${mPort} (sim)   agent :${aPort}`);
+  console.log(`messaging :${mPort} (sim)   bus :${aPort}`);
   const mHealth = await waitHttp(`${msgUrl}/healthz`, (h) => h.ok, "messaging /healthz");
   if (mHealth.transport !== "sim") {
     throw new Error(`messaging transport is "${mHealth.transport}", expected "sim"`);
   }
-  const aHealth = await waitHttp(`${agentUrl}/healthz`, (h) => h.ok && h.messaging, "agent /healthz");
-  console.log(`agent up: stub=${aHealth.stub} ambiguous=${aHealth.ambiguous}`);
-  await waitHttp(`${msgUrl}/healthz`, (h) => h.subscribers >= 1, "agent fanout subscription");
-  console.log("agent subscribed to messaging fanout");
+  const aHealth = await waitHttp(`${busUrl}/healthz`, (h) => h.ok && h.messaging, "bus /healthz");
+  console.log(`bus up: stub=${aHealth.stub} ambiguous=${aHealth.ambiguous}`);
+  await waitHttp(`${msgUrl}/healthz`, (h) => h.subscribers >= 1, "bus fanout subscription");
+  console.log("bus subscribed to messaging fanout");
 
   async function sendInbound(from, body) {
     const who = from === CONTRACTOR ? "contractor" : "client";
@@ -230,7 +230,7 @@ async function main() {
 main()
   .catch((e) => {
     console.error(`\nFAIL: ${e.message}`);
-    for (const name of ["messaging", "agent"]) {
+    for (const name of ["messaging", "bus"]) {
       const tail = logs[name].slice(-12);
       if (tail.length) console.error(`\n--- ${name} log tail ---\n${tail.join("\n")}`);
     }

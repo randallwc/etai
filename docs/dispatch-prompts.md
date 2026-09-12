@@ -237,7 +237,7 @@ Verify: cd frontend && npm run build.
 PROMPT 6 -- inbound customer replies (optional, backend)
 --------------------------------------------------------
 
-Owns: agent/index.js, agent/intent.js (extend), agent/tests/.
+Owns: bus/index.js, bus/intent.js (extend), bus/tests/.
 
 ```
 You are working in the etai repo (read AGENTS.md, docs/AGENT.md,

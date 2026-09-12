@@ -1,7 +1,7 @@
 Conversation spec -- context-aware AI reader
 =============================================
 
-Extends docs/agent.md. Today ai.js classifies each text in isolation.
+Extends docs/bus.md. Today ai.js classifies each text in isolation.
 This spec makes the reader conversational: it sees the thread, the
 pending proposal, and the texter's jobs, and it may ask a question
 instead of guessing. One assistant/chat call per inbound text stays --
