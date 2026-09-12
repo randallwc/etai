@@ -68,11 +68,14 @@ coworker.
 List endpoints paginate with {data, total, has_more}; day-summary code
 tolerates absent fields.
 
-The docs page mentions POST /api/assistant/chat, but that path is not in
-the live OpenAPI catalog. We compose the same behavior from primitives
-(resolve attendee, check availability, create event) instead — that was
-tried first and abandoned. If a real assistant endpoint appears, swap it
-into handleRequest only.
+POST /api/assistant/chat is live (see assistant-chat-response schema)
+and wired into handleRequest: non-scheduling text goes to the
+Assistant, which answers with its own workspace tools; on failure the
+request falls back to creating a task. Scheduling stays on the
+deterministic primitive path (resolve attendee, check availability,
+create event) because it owns the travel/weather/working-hours checks
+and avoids the Assistant's ~30s agentic-loop timeout noted in
+docs/calendar-agent.md.
 
 Approaches considered
 ---------------------
