@@ -74,9 +74,12 @@ LANDMINES
   - coworkers dispatch needs coworker_service_id, only present on
     persona-backed coworkers created post-verification. Act AS the agent.
   - Ambiguous list endpoints paginate {data,total,has_more}.
-  - iMessage needs a Mac running BlueBubbles; there is no other real path
-    (LoopMessage sandbox is inbound-initiated only). Sim transport in
-    messaging/ exists precisely so nobody is blocked on this.
+  - iMessage needs a Mac running BlueBubbles; the only other real outbound
+    path today is ambimail (Ambiguous mail.send -> number@vtext.com),
+    wired into messaging/ transports -- Verizon-only, outbound-only, and
+    the gateway dies ~March 2027. Two live sends to 5550100102 went out
+    this way on 2026-09-12; delivery unconfirmed. Sim transport remains
+    for offline work.
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
   - Ambiguous events/bookings are member-centric: availability only exists
     for workspace members (the contractor), not external clients.
