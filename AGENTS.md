@@ -222,8 +222,7 @@ applies here too: one file fetches Ambiguous.
 
 1. Small state, one owner. `App.jsx` owns the dispatch board and the
    call overlay. `CallScreen.jsx` owns the call phase machine:
-   connecting, live, sending, done — plus `awaitingTask` for the new-task
-   branch.
+   connecting, live, sending, done.
 2. Personas are data, not code. The roster is a single etAI persona
    from `agents.js`; `fetchCoworkers` stays in the api boundary if a
    multi-agent roster ever returns. Never hardcode a persona inside a

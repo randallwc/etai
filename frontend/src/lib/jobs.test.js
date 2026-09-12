@@ -42,7 +42,7 @@ describe("loadBoard and saveBoard", () => {
   });
 
   it("falls back to the seed on corrupt JSON", () => {
-    localStorage.setItem("etai.board", "{not json");
+    localStorage.setItem("etai.board.v2", "{not json");
     expect(loadBoard()).toEqual(seedBoard());
   });
 

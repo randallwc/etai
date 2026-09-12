@@ -14,9 +14,9 @@
   },
   "customers": [
     {
-      "id": "cust_marta",
-      "name": "Marta Reyes",
-      "phone": "+15551234567",
+      "id": "cust_albin",
+      "name": "Albin Shrestha",
+      "phone": "+15550100101",
       "address": "5216 Ballard Ave NW, Seattle, WA 98107",
       "ambiguousCrmId": null,
       "notes": "Gate code 4421, dog in yard"
@@ -47,7 +47,7 @@
   "jobs": [
     {
       "id": "job_lockout",
-      "customerId": "cust_marta",
+      "customerId": "cust_albin",
       "contractorId": "con_al",
       "ambiguousEventId": null,
       "status": "confirmed",

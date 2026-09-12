@@ -1,6 +1,6 @@
 import seed from "../data/seed.json";
 
-const STORAGE_KEY = "etai.board";
+const STORAGE_KEY = "etai.board.v2";
 
 const ACTIONS = {
   depart: "en_route",

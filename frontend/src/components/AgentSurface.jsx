@@ -23,16 +23,14 @@ export default function AgentSurface({ agent, speaking }) {
         <RiveComponent />
       </div>
       <div className="agent-surface-label">
-        <strong>{agent.name}</strong>
+        {agent.name === "etAI" ? (
+          <img className="agent-wordmark" src="/etai-wordmark.svg" alt="etAI" />
+        ) : (
+          <strong>{agent.name}</strong>
+        )}
         <span>{agent.role}</span>
         {agent.skills?.length > 0 && (
-          <div className="skill-chips">
-            {agent.skills.map((s) => (
-              <span key={s} className="skill-chip">
-                {s}
-              </span>
-            ))}
-          </div>
+          <span className="agent-skills">{agent.skills.join(" · ")}</span>
         )}
       </div>
     </div>

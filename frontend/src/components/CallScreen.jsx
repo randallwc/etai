@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import AgentSurface from "./AgentSurface.jsx";
-import {
-  fetchDaySummary,
-  createTask,
-  handleRequest,
-  sendConversation,
-} from "../api/ambiguous.js";
+import { handleRequest, sendConversation } from "../api/ambiguous.js";
 import { isDoneSignal, offlineReply } from "../lib/parseRequest.js";
 
 const SR =
@@ -18,7 +13,6 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [awaitingTask, setAwaitingTask] = useState(false);
   const [sendOk, setSendOk] = useState(null);
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState(false);
@@ -81,19 +75,6 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     setMessages((m) => [...m, { from: "user", text }]);
   }
 
-  function chooseSummary() {
-    userSay("Give me my day summary.");
-    fetchDaySummary()
-      .then((text) => agentSay(text || "Your calendar is clear today."))
-      .catch(() => agentSay("Your calendar is clear today."));
-  }
-
-  function chooseTask() {
-    userSay("I want to add a new task.");
-    setAwaitingTask(true);
-    setTimeout(() => agentSay("Sure — tell me what you need to get done."), 700);
-  }
-
   const lastAgentMsg = [...messages].reverse().find((m) => m.from === "agent");
 
   async function submitUserText(text) {
@@ -104,16 +85,6 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     if (lastAgentMsg?.text.includes("Is that all") && isDoneSignal(text)) {
       agentSay("Perfect — passing everything to Ambiguous to confirm. Bye!");
       setTimeout(handleEnd, 1400);
-      return;
-    }
-
-    if (awaitingTask) {
-      setAwaitingTask(false);
-      createTask(text).catch(() => {});
-      setTimeout(
-        () => agentSay("Done — it's in Ambiguous. Is that all?"),
-        700
-      );
       return;
     }
 
@@ -198,7 +169,6 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     stopMic();
     window.speechSynthesis?.cancel();
     setMessages([]);
-    setAwaitingTask(false);
     setSendOk(null);
     setPhase("connecting");
     setTimeout(() => {
@@ -250,21 +220,12 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
           </div>
         )}
 
-        {phase === "live" && !awaitingTask && (
-          <div className="choices">
-            <button onClick={chooseSummary}>Day summary</button>
-            <button onClick={chooseTask}>New task</button>
-          </div>
-        )}
-
         {phase === "live" && (
           <form className="composer" onSubmit={handleSend}>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                awaitingTask ? "Describe the task…" : `Say something…`
-              }
+              placeholder="Say something…"
             />
           </form>
         )}

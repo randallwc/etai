@@ -18,16 +18,15 @@ THE FLOW
     User texts or calls the agent
             |
             v
-    Agent greets and asks:
-      "Do you want a day summary, or add a new task?"
+    Agent greets and listens:
+      rescheduling, booking, status updates, tasks
             |
-            |-- Day summary --> agent reads back today's plan
+            v
+    User says what they need (voice/text)
             |
-            `-- New task ---> user describes it (voice/text)
-                              |
-                              v
-                  Conversation is packaged and sent
-                  to Ambiguous.ai for scheduling & planning
+            v
+    Conversation is packaged and sent
+    to Ambiguous.ai for scheduling & planning
 
 KEY IDEAS
 ---------
@@ -79,7 +78,7 @@ ROADMAP
 Done:
 
   - Call UI with user video + per-persona agent surface
-  - Day-summary / new-task prompt flow
+  - Freeform request flow (summary, task, scheduling) via text/voice
   - Ambiguous.ai integration layer (coworkers, tasks, calendar,
     transcript handoff)
 
