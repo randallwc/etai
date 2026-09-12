@@ -29,17 +29,25 @@ workspace is the calendar of record. A FaceTime-style web app
 
 ## docs
 
-- `docs/GOAL.md` — product framing, MVP scope, demo script
-- `docs/architecture.txt` — the services and how they connect
-- `docs/INTERFACES.md` — component ownership and env vars
-- `docs/API.md` — agent endpoints, tools, data model
-- `docs/agent.md` — running the agent service
-- `docs/messaging.md` — running the messaging service
-- `docs/messaging-plan.md` — the messaging-side work plan
-- `docs/PHONE.md` / `docs/CALENDAR.md` — wire contracts
-- `docs/frontend.md` — the call-your-agent web app
-- `docs/ambiguous-integration.md` — verified Ambiguous endpoints
-- `docs/calendar-agent.md` / `docs/setup.md` — assistant script + setup
+- [Product goal](docs/GOAL.md) — the contractor-dispatcher problem, MVP behavior, scope, risks, and demo framing.
+- [Architecture](docs/architecture.txt) — how messaging, the router, calendar integration, and call UI exchange data today and where the planned flow differs.
+- [Interfaces](docs/INTERFACES.md) — component ownership, shared contracts, build order, and environment-variable registry.
+- [API](docs/API.md) — agent endpoints, tools, data model, message flows, Ambiguous mapping, and operational gotchas.
+- [Calendar contract](docs/CALENDAR.md) — availability and event CRUD contract, errors, conformance checks, and calendar-provider options.
+- [Phone contract](docs/PHONE.md) — normalized inbound-message and outbound-send boundary shared by messaging consumers.
+- [Agent service](docs/agent.md) — agent-core modules, HTTP routes, intent handling, state, and voice-turn behavior.
+- [Messaging service](docs/messaging.md) — running the phone service, transports, subscriptions, mail polling, configuration, and iMessage caveats.
+- [Messaging behavior](docs/MESSAGING_GOAL.md) — client, contractor, and time-triggered flows, notification rules, and the seeded demo sequence.
+- [Messaging integration plan](docs/messaging-plan.md) — verified real-SMS path, one-brain routing rule, remaining tasks, and field-tested gotchas.
+- [Calendar agent](docs/calendar-agent.md) — direct MCP calendar integration, strict booking/rescheduling inputs, and Assistant timeout tradeoffs.
+- [Calendar notifications](docs/notifications.md) — reminder polling through the bus to contractor texts, including delivery and dedup behavior.
+- [Ambiguous integration](docs/ambiguous-integration.md) — verified workspace endpoints, authentication, frontend use, platform limitations, and rejected approaches.
+- [External integrations](docs/INTEGRATIONS.md) — integration map and the single Ambiguous boundary owned by each component.
+- [Frontend](docs/frontend.md) — call-your-agent UI flow, offline behavior, implementation ideas, and roadmap.
+- [Setup](docs/setup.md) — workspace provisioning, CLI authentication, Make targets, demo command, tests, and hooks.
+- [Dispatch prompts](docs/dispatch-prompts.md) — coordinated implementation brief for the trade-job management-console direction.
+- [Project plan](docs/PLAN.md) — high-level build plan, decisions, and lessons learned for the text-to-calendar loop.
+- [Logo explorations](docs/logo/index.html) — preview page for the ETAi wordmark and icon variants.
 
 ## quick start
 
