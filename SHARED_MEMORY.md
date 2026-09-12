@@ -105,6 +105,14 @@ LANDMINES
   - Phone normalization: toE164 adds +1 for 10-digit inputs -- sim and
     mail inbound agree on +1XXXXXXXXXX threadKeys. A message normalized
     without the 1 (+4253...) misses jobForPhone lookups silently.
+  - Exactly ONE consumer of messaging /webhooks/inbound: the agent
+    (agent/index.js self-subscribes PUBLIC_URL + uses MESSAGING_URL).
+    The bus also has a /webhooks/inbound that forwards prose to
+    assistant/chat -- subscribe both and every text gets two replies.
+    Point UPSTREAM_URL at the agent; the bus's live role is
+    /webhooks/calendar for calendar-agent/notify.js.
+  - Frontend -> messaging is cross-origin: messaging answers OPTIONS
+    and sets allow-*. If you add a service the UI calls, do the same.
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
   - Ambiguous events/bookings are member-centric: availability only exists
     for workspace members (the contractor), not external clients.

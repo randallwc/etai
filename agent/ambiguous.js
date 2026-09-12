@@ -8,6 +8,7 @@ function createAmbiguous(env = process.env) {
   async function api(path, options = {}) {
     const res = await fetch(`${base}/api${path}`, {
       ...options,
+      signal: AbortSignal.timeout(60_000),
       headers: {
         authorization: `Bearer ${key}`,
         "content-type": "application/json",
