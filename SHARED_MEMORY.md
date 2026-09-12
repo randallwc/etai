@@ -23,7 +23,14 @@ LAYOUT AND OWNERSHIP
                      for real iMessage, /simulate/inbound to test without
                      a Mac. Contract: models/phone-contract.schema.json,
                      docs/messaging.md
-  models/            JSON Schemas only (*.schema.json), one per shape
+  agent/             (planned) the agent core -- consumes messaging inbound,
+                     intent -> Ambiguous -> reply via /send. Plan and build
+                     order: docs/messaging-plan.md
+  models/            JSON Schemas only (*.schema.json), one per shape;
+                     includes the agent data model (contractor, customer,
+                     job, agent-action, message) for the agent core
+  shared/            zero-dep helpers shared by services (env.js loads
+                     .env without overriding set vars)
   docs/              all documents live here; unix format, no tables
   bus/               reserved, empty
 
@@ -83,12 +90,20 @@ LANDMINES
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
   - Ambiguous events/bookings are member-centric: availability only exists
     for workspace members (the contractor), not external clients.
+  - core.hooksPath=.githooks bypasses .git/hooks entirely. The hook runs
+    only root `npm test` (node:test glob) -- frontend vitest does NOT run
+    on commit despite scripts/pre-commit.sh existing. That script was
+    never installed here and would be bypassed anyway. Run
+    `npm --prefix frontend test` yourself before committing frontend work.
 
 CURRENT GAPS
 ------------
 
-  - No agent core yet: nothing consumes messaging inbound, decides intent,
-    calls Ambiguous, and replies. That loop is the next thing to build.
+  - Agent core is the active workstream: nothing yet consumes messaging
+    inbound, decides intent, calls Ambiguous, and replies. The plan is
+    docs/messaging-plan.md; its data-model schemas are already committed
+    under models/. First code step: agent/ skeleton + POST
+    /webhooks/inbound intake.
   - bus/ is empty; user-interface/ is empty (frontend/ is the real UI).
   - Voice calls not wired; Vapi preferred (mid-call tool calls), see
     docs/PHONE.md.
