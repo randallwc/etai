@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <defs>
+    <linearGradient id="etai-icon-grad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C6AFF"/>
+      <stop offset="0.4952" stop-color="#4F87ED"/>
+      <stop offset="1" stop-color="#8979CB"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="22" fill="url(#etai-icon-grad)"/>
+  <text x="48" y="60" text-anchor="middle" font-family="InterVariable, Inter, -apple-system, 'Segoe UI', sans-serif" font-size="34" font-weight="800" letter-spacing="-1.5" fill="#fff">etAI</text>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="etai-grad" x1="0" y1="0" x2="176" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C6AFF"/>
+      <stop offset="0.4952" stop-color="#4F87ED"/>
+      <stop offset="1" stop-color="#8979CB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#ffffff"/>
+  <g transform="translate(380 190) scale(2.5)">
+    <text x="6" y="66" font-family="InterVariable, Inter, -apple-system, 'Segoe UI', sans-serif" font-size="68" font-weight="800" letter-spacing="-3" fill="#27272c">et<tspan fill="url(#etai-grad)">AI</tspan></text>
+    <path d="M70 78 H132" stroke="url(#etai-grad)" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="144" cy="78" r="5" fill="#8979CB"/>
+  </g>
+  <text x="600" y="480" text-anchor="middle" font-family="InterVariable, Inter, -apple-system, 'Segoe UI', sans-serif" font-size="44" font-weight="500" fill="#5b6271">a dispatcher you text</text>
+</svg>

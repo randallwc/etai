@@ -1,4 +1,6 @@
-# ETAi
+<img src="docs/logo/etai-wordmark.svg" alt="etAI" width="220">
+
+**etAI — AI dispatcher for the trades.**
 
 **AI Tinkerers Seattle Hackathon 2026** · [Hackathon page](https://seattle.aitinkerers.org/hackathons/h_GfcjwcUkasM/teams) · [Ambiguous.ai](https://app.ambiguous.ai/settings)
 
