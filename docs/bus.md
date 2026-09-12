@@ -73,6 +73,19 @@ it to one client (400 if that phone has no job); omitted, it fans out to
 every customer with a confirmed future job, one text per customer. Each
 send lands in the AgentAction log as client_update. -> 200 {"sent": n}.
 
+POST /webhooks/calendar -- a normalized CalendarNotification
+(models/calendar-notification.schema.json) from calendar-agent/notify.js,
+which polls Ambiguous's upcoming-reminders feed and POSTs here. Dedups on
+"cal:"+id, answers 202, then texts the contractor. Ambiguous can also push
+event.created/updated/deleted via POST /api/webhooks, but that needs a
+public https URL for the bus; pull via notify.js is the wired path today.
+Details in docs/notifications.md.
+
+GET /state -- the dispatch board's read model, per
+models/board-state.schema.json: { jobs, customers, actions } as arrays
+straight from the store. Read-only; there is no auth, so it is for
+localhost and demo use only -- do not expose it on a public URL.
+
 GET /healthz -- { ok, stub, ambiguous, messaging }.
 
 INTENTS
