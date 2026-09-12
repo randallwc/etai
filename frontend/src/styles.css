@@ -1,11 +1,25 @@
 :root {
-  --agent-color: #4f46e5;
-  --bg: #f1f2f8;
+  --agent-color: #405ef2;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --ink: #191933;
-  --ink-dim: rgba(25, 25, 51, 0.55);
-  --line: rgba(25, 25, 51, 0.12);
-  --accent: #4f46e5;
+  --surface-2: #f1f3f9;
+  --ink: #27272c;
+  --ink-dim: #5b6271;
+  --line: #e5e7eb;
+  --accent: #405ef2;
+  --accent-hover: #1c6aff;
+  --accent-subtle: #405ef21a;
+  --shadow-card: 0 1px 2px #0000000d, 0 8px 32px #00000014;
+  --landscape: radial-gradient(
+      ellipse 95% 22% at -5% 12%,
+      #c8dbffd9 0%,
+      transparent 60%
+    ),
+    radial-gradient(ellipse 95% 26% at -8% 52%, #c8dbffb3 0%, transparent 60%),
+    radial-gradient(ellipse 55% 16% at 90% 4%, #ff914638 0%, transparent 55%),
+    radial-gradient(ellipse 48% 14% at 70% 18%, #8979cb2e 0%, transparent 55%),
+    radial-gradient(ellipse 52% 18% at 30% 55%, #8979cb33 0%, transparent 60%),
+    radial-gradient(ellipse 50% 14% at 42% 2%, #4f87ed26 0%, transparent 55%);
 }
 
 * {
@@ -21,8 +35,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
-    sans-serif;
+  font-family: "InterVariable", "Inter", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
@@ -30,8 +46,6 @@ body {
   height: 100vh;
   height: 100dvh;
 }
-
-
 
 .ft-call {
   position: relative;
@@ -41,7 +55,6 @@ body {
   overflow: hidden;
 }
 
-
 .agent-surface {
   position: absolute;
   inset: 0;
@@ -50,14 +63,23 @@ body {
   align-items: center;
   justify-content: center;
   gap: 12px;
+  background: var(--landscape), var(--bg);
+}
+
+.agent-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: radial-gradient(
     circle at 50% 45%,
-    color-mix(in srgb, var(--agent-color) 14%, var(--bg)) 0%,
-    var(--bg) 75%
+    color-mix(in srgb, var(--agent-color) 10%, transparent) 0%,
+    transparent 60%
   );
+  pointer-events: none;
 }
 
 .orb-core {
+  position: relative;
   width: 130px;
   height: 130px;
   border-radius: 50%;
@@ -67,11 +89,11 @@ body {
   font-weight: 600;
   color: #fff;
   background: linear-gradient(
-    150deg,
+    135deg,
     var(--agent-color),
-    color-mix(in srgb, var(--agent-color) 55%, #000)
+    color-mix(in srgb, var(--agent-color) 55%, #8979cb)
   );
-  box-shadow: 0 0 80px color-mix(in srgb, var(--agent-color) 35%, transparent);
+  box-shadow: 0 0 80px color-mix(in srgb, var(--agent-color) 30%, transparent);
 }
 
 .agent-surface.speaking .orb-core {
@@ -84,6 +106,7 @@ body {
 }
 
 .agent-surface-label {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -100,6 +123,7 @@ body {
 }
 
 .skill-chips {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -113,12 +137,10 @@ body {
   font-weight: 600;
   padding: 4px 11px;
   border-radius: 999px;
-  color: var(--agent-color);
-  background: color-mix(in srgb, var(--agent-color) 9%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--agent-color) 25%, transparent);
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
 }
-
-
 
 .pip {
   position: absolute;
@@ -126,10 +148,10 @@ body {
   top: calc(72px + env(safe-area-inset-top));
   width: min(140px, 30vw);
   aspect-ratio: 3 / 4;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--line);
-  box-shadow: 0 8px 30px rgba(25, 25, 51, 0.18);
+  box-shadow: var(--shadow-card);
   cursor: grab;
   touch-action: none;
   z-index: 20;
@@ -151,12 +173,10 @@ body {
   height: 100%;
   display: grid;
   place-items: center;
-  background: #e7e8f0;
+  background: var(--surface-2);
   color: var(--ink-dim);
   font-size: 0.75rem;
 }
-
-
 
 .ft-top {
   position: absolute;
@@ -187,11 +207,12 @@ body {
   font-weight: 600;
   cursor: pointer;
   opacity: 0.45;
+  box-shadow: 0 1px 2px #00000014;
 }
 
 .switch-dot.on {
   opacity: 1;
-  border-color: rgba(25, 25, 51, 0.5);
+  border-color: var(--ink);
 }
 
 .ft-status {
@@ -199,8 +220,6 @@ body {
   font-weight: 500;
   color: var(--ink-dim);
 }
-
-
 
 .ft-bottom {
   position: absolute;
@@ -225,16 +244,16 @@ body {
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 8px 30px rgba(25, 25, 51, 0.08);
+  box-shadow: var(--shadow-card);
   padding: 10px 18px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .caption-name {
   display: block;
   font-size: 0.7rem;
   font-weight: 700;
-  color: var(--agent-color);
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 2px;
@@ -255,10 +274,12 @@ body {
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .choices button:hover {
-  border-color: rgba(25, 25, 51, 0.4);
+  background: var(--surface-2);
+  border-color: var(--accent);
 }
 
 .composer {
@@ -276,6 +297,7 @@ body {
   font-size: 1rem;
   outline: none;
   text-align: center;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .composer input::placeholder {
@@ -284,7 +306,7 @@ body {
 
 .composer input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .ft-controls {
@@ -303,12 +325,22 @@ body {
   cursor: pointer;
   background: var(--surface);
   color: var(--ink);
+  box-shadow: 0 1px 2px #0000000d;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ctrl-btn:hover:not(:disabled) {
+  background: var(--surface-2);
 }
 
 .ctrl-btn.end {
-  background: #e03a3a;
+  background: #dc2626;
   border-color: transparent;
   color: #fff;
+}
+
+.ctrl-btn.end:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 .ctrl-btn:disabled {
@@ -317,9 +349,13 @@ body {
 }
 
 .ctrl-btn.mic.on {
-  background: var(--agent-color);
+  background: var(--accent);
   border-color: transparent;
   color: #fff;
+}
+
+.ctrl-btn.mic.on:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .call-summary {
@@ -331,15 +367,15 @@ body {
   gap: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 8px 30px rgba(25, 25, 51, 0.08);
+  box-shadow: var(--shadow-card);
   padding: 14px 18px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .call-summary-head {
   font-size: 0.7rem;
   font-weight: 700;
-  color: var(--agent-color);
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
