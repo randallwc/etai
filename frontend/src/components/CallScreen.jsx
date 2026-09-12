@@ -60,6 +60,7 @@ export default function CallScreen({ agent, agents, onSwitch }) {
 
   useEffect(() => {
     return () => {
+      window.speechSynthesis?.cancel();
       if (payloadRef.current?.transcript) {
         sendConversation(payloadRef.current).catch(() => {});
       }
@@ -67,9 +68,30 @@ export default function CallScreen({ agent, agents, onSwitch }) {
   }, [agent]);
 
   function agentSay(text) {
-    setSpeaking(true);
     setMessages((m) => [...m, { from: "agent", text }]);
-    setTimeout(() => setSpeaking(false), Math.min(4000, 800 + text.length * 30));
+    const synth = window.speechSynthesis;
+    if (!synth) {
+      setSpeaking(true);
+      setTimeout(
+        () => setSpeaking(false),
+        Math.min(4000, 800 + text.length * 30)
+      );
+      return;
+    }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = agent.voice?.pitch ?? 1;
+    u.rate = agent.voice?.rate ?? 1;
+    setSpeaking(true);
+    const guard = setTimeout(
+      () => setSpeaking(false),
+      Math.min(15000, 2000 + text.length * 100)
+    );
+    u.onend = u.onerror = () => {
+      clearTimeout(guard);
+      setSpeaking(false);
+    };
+    synth.speak(u);
   }
 
   function userSay(text) {
@@ -158,7 +180,10 @@ export default function CallScreen({ agent, agents, onSwitch }) {
       stopMic();
     };
     rec.onend = () => {
-      if (recRef.current === rec) {
+      if (recRef.current !== rec) return;
+      try {
+        rec.start();
+      } catch {
         recRef.current = null;
         setListening(false);
       }
@@ -168,10 +193,17 @@ export default function CallScreen({ agent, agents, onSwitch }) {
     setListening(true);
   }
 
-  useEffect(() => () => recRef.current?.stop(), []);
+  useEffect(
+    () => () => {
+      recRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    },
+    []
+  );
 
   async function handleEnd() {
     stopMic();
+    window.speechSynthesis?.cancel();
     setPhase("sending");
     const res = await sendConversation(payloadRef.current);
     payloadRef.current = null;
@@ -181,6 +213,7 @@ export default function CallScreen({ agent, agents, onSwitch }) {
 
   function handleRedial() {
     stopMic();
+    window.speechSynthesis?.cancel();
     setMessages([]);
     setAwaitingTask(false);
     setSendOk(null);

@@ -13,6 +13,19 @@
     "initials": { "type": "string", "maxLength": 2 },
     "greeting": { "type": "string", "description": "First line spoken on connect" },
     "summary": { "type": ["string", "null"], "description": "Canned day summary; null means fetch from Ambiguous" },
-    "taskAck": { "type": "string" }
+    "taskAck": { "type": "string" },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What this agent is good at; shown as chips under the agent name"
+    },
+    "voice": {
+      "type": "object",
+      "properties": {
+        "pitch": { "type": "number", "minimum": 0, "maximum": 2 },
+        "rate": { "type": "number", "minimum": 0.5, "maximum": 2 }
+      },
+      "description": "speechSynthesis utterance tuning — gives each agent a distinct voice"
+    }
   }
 }

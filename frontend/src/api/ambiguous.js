@@ -33,6 +33,8 @@ export function coworkerToPersona(user, i = 0) {
     summary: null,
     taskAck:
       "Done — it's in Ambiguous now. I'll work it into your schedule.",
+    skills: user.focus_areas?.slice(0, 3) ?? ["scheduling", "tasks"],
+    voice: { pitch: 0.85 + (i % 5) * 0.12, rate: 1 },
   };
 }
 

@@ -43,13 +43,31 @@ describe("coworkerToPersona", () => {
   it("maps an Ambiguous user to a persona", async () => {
     const m = await loadModule("ak_test");
     const p = m.coworkerToPersona(
-      { id: "u1", type: "agent", display_name: "Nova", workspace_email: "n@w.ambi.cc" },
+      {
+        id: "u1",
+        type: "agent",
+        display_name: "Nova",
+        workspace_email: "n@w.ambi.cc",
+        focus_areas: ["calendar", "mail", "tasks", "crm"],
+      },
       0
     );
     expect(p.name).toBe("Nova");
     expect(p.role).toBe("AI Coworker");
     expect(p.initials).toBe("N");
     expect(p.greeting).toContain("Nova");
+    expect(p.skills).toEqual(["calendar", "mail", "tasks"]);
+    expect(p.voice).toEqual({ pitch: 0.85, rate: 1 });
+  });
+
+  it("falls back to default skills without focus_areas", async () => {
+    const m = await loadModule("ak_test");
+    const p = m.coworkerToPersona(
+      { id: "u2", type: "agent", display_name: "Sage" },
+      2
+    );
+    expect(p.skills).toEqual(["scheduling", "tasks"]);
+    expect(p.voice.pitch).toBeCloseTo(1.09);
   });
 });
 
@@ -163,6 +181,30 @@ describe("handleRequest", () => {
     const m = await loadModule("ak_test");
     const reply = await m.handleRequest("meeting tomorrow with Ghost");
     expect(reply).toContain("isn't in the workspace");
+  });
+
+  it("matches an attendee by username when display_name misses", async () => {
+    let posted;
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "GET /users": () => ({
+          data: [
+            { id: "u7", type: "human", display_name: "A. Shrestha", username: "albin" },
+          ],
+        }),
+        "GET /calendars/availability": () => ({ availability: { u7: [] } }),
+        "GET /calendars": () => ({ data: [{ id: "cal1", is_default: true }] }),
+        "POST /calendars": (path, body) => {
+          posted = JSON.parse(body);
+          return { id: "ev2" };
+        },
+      })
+    );
+    const m = await loadModule("ak_test");
+    const reply = await m.handleRequest("meeting tomorrow with Albin");
+    expect(reply).toContain("A. Shrestha");
+    expect(posted.attendees).toEqual([{ user_id: "u7" }]);
   });
 });
 
