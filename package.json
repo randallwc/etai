@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test calendar-agent/tests",
+    "test": "node --test '*/tests/*.test.js'",
     "test:calendar": "node calendar-agent/test.js"
   },
   "engines": {

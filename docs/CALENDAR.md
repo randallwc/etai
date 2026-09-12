@@ -3,6 +3,13 @@ CALENDAR -- service contract
 
 Owner: calendar team. Consumer: the agent service.
 
+Implementation note: the live calendar-agent currently resolves scheduling
+requests through Ambiguous Assistant chat (POST /api/assistant/chat, see
+docs/calendar-agent.md) rather than raw event endpoints. This document stays
+the contract of what the agent service needs; how the calendar side
+satisfies it (Assistant chat vs direct event API) is the calendar team's
+choice -- the shapes below are what flows between us either way.
+
 This document is the entire contract. The agent needs five operations:
 check availability, list a day, create an event, update an event, cancel an
 event. Everything Ambiguous-specific -- auth, endpoint paths, quota,
