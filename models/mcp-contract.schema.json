@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etai/models/mcp-contract",
+  "title": "Ambiguous MCP Contract",
+  "description": "Wire shapes the calendar-agent relies on when speaking to the Ambiguous MCP server at https://app.ambiguous.ai/mcp (Streamable HTTP transport, protocol 2025-06-18). Responses arrive as SSE 'data:' frames or a single JSON body; each carries one JSON-RPC envelope.",
+  "$defs": {
+    "jsonRpcRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "method"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": "integer", "minimum": 1 },
+        "method": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "jsonRpcResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "id"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": "integer" },
+        "result": {},
+        "error": { "$ref": "#/$defs/rpcError" }
+      },
+      "additionalProperties": true
+    },
+    "rpcError": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string" },
+        "data": {}
+      },
+      "additionalProperties": true
+    },
+    "initializeParams": {
+      "type": "object",
+      "required": ["protocolVersion", "capabilities", "clientInfo"],
+      "properties": {
+        "protocolVersion": { "const": "2025-06-18" },
+        "capabilities": { "type": "object" },
+        "clientInfo": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "initializeResult": {
+      "type": "object",
+      "required": ["protocolVersion", "capabilities", "serverInfo"],
+      "properties": {
+        "protocolVersion": { "type": "string" },
+        "capabilities": { "type": "object" },
+        "serverInfo": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "toolsCallParams": {
+      "type": "object",
+      "required": ["name", "arguments"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "arguments": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "contentBlock": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["text", "image", "resource", "resource_link"] },
+        "text": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "toolsCallResult": {
+      "type": "object",
+      "required": ["content"],
+      "properties": {
+        "content": { "type": "array", "items": { "$ref": "#/$defs/contentBlock" } },
+        "structuredContent": { "type": "object" },
+        "isError": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  }
+}
