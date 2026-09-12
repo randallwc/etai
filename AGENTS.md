@@ -21,6 +21,21 @@ where the work is already happening?
    functions.
 1. Never use em dashes. Use single hyphens when punctuation needs a dash.
    Keep sentences plain English, short, and to the point.
+1. Delete stale code and docs when replacing a flow.
+1. Keep one source of truth per feature. Update or remove conflicting docs
+   in the same change.
+1. Keep README focused on what runs now. Move history and rejected ideas
+   into a short decision log.
+1. For changes, report only changed files, verification run, and known
+   limitation.
+1. Avoid filler terms such as “robust,” “seamless,” “comprehensive,”
+   “leverages,” and “future-proof.”
+1. Every new file needs a named owner and a reason it cannot fit an
+   existing file.
+1. Prefer concrete acceptance criteria over vague product language.
+1. Always pull with rebase before pushing. Use autostash when the worktree
+   has other agents' changes, then resolve any restore conflicts without
+   changing their work.
 1. Always create a schema before writing code and commit it first,
    under `models/`.
 1. Keep documents in `./docs`, unix format, no tables. Prose summaries
@@ -93,10 +108,10 @@ draggable picture-in-picture tile.
 ├── Makefile                   delegates to per-component Makefiles
 ├── calendar-agent/            Ambiguous Assistant chat smoke script
 │   └── tests/
-├── agent/                     the agent core — texts and voice turns
+├── bus/                     the agent core — texts and voice turns
 │   │                          in, Ambiguous calls, replies out.
-│   │                          Docs: docs/agent.md
-│   ├── index.js               HTTP + wiring (createAgentServer)
+│   │                          Docs: docs/bus.md
+│   ├── index.js               HTTP + wiring (createBusServer)
 │   ├── loop.js                intent -> calendar tools -> reply
 │   ├── ai.js                  assistant/chat intent classification
 │   ├── calendar.js            calendar adapter + stub fallback
@@ -133,13 +148,13 @@ draggable picture-in-picture tile.
 ## 4. Commands
 
 Every component has a Makefile; the root one delegates (`make test`,
-`make run-messaging`, `make run-agent`, `make frontend-build`,
+`make run-messaging`, `make run-bus`, `make frontend-build`,
 `make frontend-test`, `make -C <dir> test`).
 
 Root tests (backend, node:test): `npm test` from repo root — the glob is
 `'*/tests/*.test.js'`; `node --test <dir>` does not discover tests.
 Messaging service: `make run-messaging` (PORT, default 4020)
-Agent service: `make run-agent` (PORT, default 4030)
+Bus service: `make run-bus` (PORT, default 4010)
 Calendar smoke script: `npm run test:calendar` (needs AMBIGUOUS_API_KEY)
 Install deps: `cd frontend && npm install`
 Dev server: `cd frontend && npm run dev`
@@ -183,7 +198,7 @@ mic to STT, TTS to speaker, and the phone-call layer. For call
 intelligence, do NOT rebuild scheduling logic — POST each caller turn
 to the agent service's `POST /voice/turn` ({from, body} -> {reply} to
 speak); notifications to the other party go out over messaging
-automatically. Contract in docs/agent.md. Keep `AgentSurface`'s props
+automatically. Contract in docs/bus.md. Keep `AgentSurface`'s props
 (`agent`, `speaking`) stable.
 
 ### 5.5 Messaging / Phone Agent
@@ -195,10 +210,10 @@ normalized inboundMessage shape; transport detail never crosses the
 boundary.
 
 ### 5.6 Agent Core Agent
-Owns `agent/` (docs/agent.md). Consumes normalized inbound from the
+Owns `bus/` (docs/bus.md). Consumes normalized inbound from the
 messaging service and voice turns via POST /voice/turn, owns per-thread
 state and the data model (models/*.schema.json), classifies intent via
-agent/ai.js, calls Ambiguous through its own `agent/ambiguous.js`
+bus/ai.js, calls Ambiguous through its own `bus/ambiguous.js`
 client, replies via messaging POST /send (or in the voice response
 body). Never touches a transport directly. The Ambiguous boundary rule
 applies here too: one file fetches Ambiguous.
@@ -215,7 +230,7 @@ applies here too: one file fetches Ambiguous.
    component.
 3. The Ambiguous boundary is explicit: `src/api/ambiguous.js` is the only
    frontend file that calls fetch. The backend twin is
-   `agent/ambiguous.js` once the agent core lands. Offline mode must
+   `bus/ambiguous.js` once the agent core lands. Offline mode must
    keep the app working end-to-end.
 4. Media is behind a seam. `AgentSurface` renders whatever visual the
    persona defines; the orb today, a video stream later.
@@ -236,5 +251,5 @@ Root `npm test` passes (runs on every commit via .githooks). For
 frontend work: `npm run build` and `npm test` pass, and the connecting,
 live, sending, done flow still works end-to-end including re-dial and
 mid-call switching. Personas render distinctly. The Ambiguous boundary
-stays in `src/api/ambiguous.js` (frontend) and `agent/ambiguous.js`
+stays in `src/api/ambiguous.js` (frontend) and `bus/ambiguous.js`
 (backend). No secrets, no dead code.
