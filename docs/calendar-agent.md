@@ -1,8 +1,24 @@
 The calendar-agent folder holds the Ambiguous calendar integration. main.js
-is a minimal MCP client: it posts JSON-RPC to the workspace MCP server at
+is a small MCP client: it posts JSON-RPC to the workspace MCP server at
 https://app.ambiguous.ai/mcp (Streamable HTTP transport, protocol version
-2025-06-18, Bearer auth), then calls the list_calendars and list_events tools
-directly and formats the week summary locally.
+2025-06-18, Bearer auth), then calls calendar tools directly.
+
+Other project assets can require main.js and call createEventFromText(text).
+The input is deliberately structured plain text:
+
+    Team sync | 2026-09-14T10:00:00-07:00 | 60m | review estimates
+
+The title, offset-bearing ISO start time, and duration are required; the
+description is optional. It returns a result with status created, conflict,
+or invalid rather than creating an event on malformed input or when the time
+overlaps an existing non-cancelled event. It reads the surrounding calendar
+window before creating and uses the default calendar (or the first available
+calendar). The event object returned by Ambiguous is included on success.
+
+Text is not sent to an LLM. Relative dates, vague times, attendee resolution,
+and automatic rescheduling are intentionally rejected until a caller turns
+them into the explicit text shape above. This prevents an unintended write to
+the calendar.
 
 Set AMBIGUOUS_API_KEY to a workspace API key in the repo-root .env (loaded via
 process.loadEnvFile; real environment variables take precedence) and run
