@@ -130,14 +130,6 @@
       .two-column > div { min-width: 0; }
       .problem-side { padding: 24px 0; border-top: 5px solid var(--blue); }
       .problem-side.warm { border-color: #e89e48; }
-      .big-number {
-        margin-bottom: 6px;
-        color: var(--blue);
-        font-size: clamp(56px, 8vw, 124px);
-        font-weight: 800;
-        letter-spacing: -.075em;
-        line-height: .8;
-      }
 
       .story-layout {
         display: grid;
@@ -209,19 +201,16 @@
       .flow-arrow { color: var(--blue); font-size: clamp(26px, 4vw, 56px); font-weight: 300; }
       .flow-detail { margin-top: 34px; font-size: clamp(16px, 1.65vw, 24px); }
 
-      .criteria {
+      .tool-stack {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: clamp(24px, 4vw, 64px);
         margin-top: 30px;
-        background: #d3d9e7;
       }
-      .criteria-item { min-height: 150px; padding: 25px; background: var(--paper); }
-      .criteria-item:nth-child(1) { border-top: 5px solid var(--blue); }
-      .criteria-item:nth-child(2) { border-top: 5px solid #8979cb; }
-      .criteria-item:nth-child(3) { border-top: 5px solid #e89e48; }
-      .criteria-item:nth-child(4) { border-top: 5px solid #2ea66e; }
-      .criteria-item p { margin-bottom: 0; font-size: clamp(14px, 1.45vw, 21px); }
+      .tool-block { padding: 24px 0 0; border-top: 5px solid var(--blue); }
+      .tool-block:nth-child(2) { border-color: var(--lavender); }
+      .tool-block:nth-child(3) { border-color: #e89e48; }
+      .tool-block p { margin-bottom: 0; font-size: clamp(15px, 1.5vw, 22px); }
 
       .close-layout { display: grid; height: 100%; align-content: center; }
       .close-layout h1 { max-width: 1030px; }
@@ -291,8 +280,7 @@
         .flow { grid-template-columns: 1fr; gap: 10px; margin-top: 20px; }
         .flow-arrow { height: 30px; transform: rotate(90deg); text-align: center; }
         .flow-node { min-height: 0; }
-        .criteria { grid-template-columns: 1fr; }
-        .criteria-item { min-height: 0; }
+        .tool-stack { grid-template-columns: 1fr; }
         .team-grid { grid-template-columns: repeat(2, 1fr); }
       }
     </style>
@@ -315,14 +303,12 @@
         <div class="two-column">
           <div class="problem-side warm">
             <p class="eyebrow">Client experience</p>
-            <div class="big-number">3</div>
-            <h3>Calls before help arrives</h3>
-            <p>I had my motorcycle lock broken into. Three locksmiths were unavailable or could not service a motorcycle. I lost time while the problem stayed urgent.</p>
+            <h3>Urgent work becomes a string of missed connections</h3>
+            <p>A broken motorcycle lock meant calling several locksmiths, finding they were unavailable or did not service motorcycles, and losing time while the problem stayed urgent.</p>
           </div>
           <div class="problem-side">
             <p class="eyebrow">Contractor experience</p>
-            <div class="big-number">1</div>
-            <h3>Person doing every job</h3>
+            <h3>Every interruption competes with the work already underway</h3>
             <p>A sole-proprietor electrician must work on-site, answer new leads, schedule quotes, and warn future clients when a job runs late.</p>
           </div>
         </div>
@@ -333,13 +319,12 @@
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
         <div class="story-layout">
           <div>
-            <p class="eyebrow">Demo story</p>
-            <h2>One inbound lead. One electrician who cannot stop working.</h2>
+            <p class="eyebrow">Topic 1: Quote scheduling</p>
+            <h2>A client books a quote without waiting for a callback.</h2>
             <div class="timeline">
               <div class="timeline-item"><span class="step">1</span><p>A homeowner texts to request an electrical quote.</p></div>
               <div class="timeline-item"><span class="step">2</span><p>ETAi qualifies the request and offers real open times.</p></div>
               <div class="timeline-item"><span class="step">3</span><p>The client confirms a slot. ETAi books it and texts both parties.</p></div>
-              <div class="timeline-item"><span class="step">4</span><p>The current job runs long. ETAi shifts the next appointment and notifies the client.</p></div>
             </div>
           </div>
           <div class="phone" aria-label="Example text conversation">
@@ -365,9 +350,9 @@
             <div class="bubble out">I shifted Jordan's appointment to 2:15 PM and texted the new arrival time.</div>
           </div>
           <div>
-            <p class="eyebrow">Delay update</p>
-            <h2>ETAi keeps the schedule and the affected client in sync.</h2>
-            <div class="callout"><p>When the electrician reports a delay, ETAi finds the next confirmed job, shifts its calendar window, and texts the client a new arrival time.</p></div>
+            <p class="eyebrow">Topic 2: Running late</p>
+            <h2>A contractor moves their next event when the current job takes longer.</h2>
+            <div class="callout"><p>When the electrician reports a delay, ETAi finds the next confirmed job, shifts its calendar window later, and texts the client a new arrival time.</p></div>
           </div>
         </div>
       </section>
@@ -407,13 +392,12 @@
 
       <section class="slide" aria-label="Slide 7 of 9">
         <div class="brand-wordmark" aria-label="ETAi">et<span>AI</span></div>
-        <p class="eyebrow">What judges can see</p>
-        <h2>The demo maps directly to the evaluation criteria.</h2>
-        <div class="criteria">
-          <div class="criteria-item"><h3>Working workflow</h3><p>A text becomes a scheduled quote. Both client and contractor receive confirmation.</p></div>
-          <div class="criteria-item"><h3>Environment fit</h3><p>Phone and SMS supply the live context. The workflow would lose its value in a separate dashboard.</p></div>
-          <div class="criteria-item"><h3>Integration depth</h3><p>ETAi reads availability and creates or changes real events in Ambiguous.</p></div>
-          <div class="criteria-item"><h3>Useful agent experience</h3><p>The agent responds in the channels people use and keeps the client informed when the schedule changes.</p></div>
+        <p class="eyebrow">Implementation stack</p>
+        <h2>Tools that power ETAi</h2>
+        <div class="tool-stack">
+          <div class="tool-block"><h3>Ambiguous AI workspace</h3><p>Its AI assistant interprets scheduling requests. Its calendar stores quote appointments and schedule changes.</p></div>
+          <div class="tool-block"><h3>CopilotKit</h3><p>Connects ETAi’s messages with clients and contractors in the channels where scheduling already happens.</p></div>
+          <div class="tool-block"><h3>Web Speech API and SpeechSynthesis</h3><p>Supports contractor interactions for viewing the schedule and reporting that they are running late.</p></div>
         </div>
       </section>
 
