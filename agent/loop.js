@@ -174,6 +174,24 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       return say(`Sorry, which one — ${list}? Reply with a number.`);
     }
     const slot = p.slots[n - 1];
+    const durMin = Math.round((new Date(slot.end) - new Date(slot.start)) / 60000);
+    const slotDate = new Date(slot.start).toLocaleDateString("en-CA", { timeZone: tz });
+    const clash = Object.values(store.data.jobs).some(
+      (j) =>
+        j.status === "confirmed" &&
+        j.id !== p.jobId &&
+        new Date(j.window.start) < new Date(slot.end) &&
+        new Date(j.window.end) > new Date(slot.start)
+    );
+    const open =
+      !clash &&
+      (await record("get_availability", { date: slotDate, durationMinutes: durMin, recheck: true }, () =>
+        calendar.proposeSlots({ date: slotDate, durationMinutes: durMin, count: 10 })
+      )).some((s) => s.start.toISOString() === slot.start);
+    if (!open) {
+      await say("That time was just taken —");
+      return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description }, p.mode, p.jobId, say);
+    }
     const customer = store.upsertCustomer(p.customerPhone, {});
     await crmSync(p.customerPhone);
     if (p.mode === "reschedule" && p.jobId) {
