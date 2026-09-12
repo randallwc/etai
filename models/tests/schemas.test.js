@@ -148,6 +148,50 @@ test("calendarEvent rejects unknown status and missing id", () => {
   assert.ok(errs.some((e) => e.includes("minLength")));
 });
 
+const job = schemas["job.schema.json"];
+const agentAction = schemas["agent-action.schema.json"];
+const customer = schemas["customer.schema.json"];
+
+test("job accepts a valid job and rejects bad status", () => {
+  const valid = {
+    id: "job_1",
+    customerId: "cust_1",
+    contractorId: "con_1",
+    ambiguousEventId: null,
+    status: "requested",
+    window: { start: "2026-09-14T10:00:00-07:00", end: "2026-09-14T11:00:00-07:00" },
+    description: "sprinkler repair",
+    source: "message",
+  };
+  assert.deepEqual(validate(valid, job, job), []);
+  const errs = validate({ ...valid, status: "pending" }, job, job);
+  assert.ok(errs.some((e) => e.includes("enum")));
+});
+
+test("agentAction requires tool and rejects unknown fields", () => {
+  assert.deepEqual(
+    validate(
+      { id: "a1", tool: "book_job", args: {}, createdAt: "2026-09-12T14:00:00-07:00" },
+      agentAction,
+      agentAction
+    ),
+    []
+  );
+  const errs = validate(
+    { id: "a1", tool: "book_job", args: {}, createdAt: "t", extra: 1 },
+    agentAction,
+    agentAction
+  );
+  assert.ok(errs.some((e) => e.includes("additional property")));
+});
+
+test("customer accepts a nameless client with just a phone", () => {
+  assert.deepEqual(
+    validate({ id: "c1", phone: "+15551234567", name: null }, customer, customer),
+    []
+  );
+});
+
 test("apiError matches the documented error envelope", () => {
   assert.deepEqual(
     validate(

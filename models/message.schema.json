@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Message",
+  "description": "The stored message record in the agent service's log. Inbound rows carry the phone-contract inboundMessage fields plus direction; outbound rows record what /send returned. Defined by the data model in docs/API.md.",
+  "type": "object",
+  "required": ["id", "externalId", "threadKey", "direction", "body"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "externalId": { "type": "string", "minLength": 1, "description": "provider-unique id used for dedup" },
+    "threadKey": { "type": "string", "minLength": 1, "description": "counterparty phone; the conversation identity" },
+    "direction": { "type": "string", "enum": ["in", "out"] },
+    "channel": { "type": "string", "enum": ["imessage", "sms", "voice", "console"] },
+    "body": { "type": "string", "minLength": 1 },
+    "receivedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
