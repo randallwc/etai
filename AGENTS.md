@@ -27,11 +27,30 @@ draggable picture-in-picture tile.
 ├── README.md
 ├── AGENTS.md                  this file
 ├── AGENT.md                   team engineering rules
+├── SHARED_MEMORY.md           live state + landmines for all agents
+├── FAISAL_MEMORY.md           Devin's machine/repo notes
 ├── LICENSE
+├── package.json               root test script: node --test '*/tests/*.test.js'
+├── .githooks/pre-commit       runs root npm test (core.hooksPath=.githooks)
 ├── models/                    JSON Schemas for every data shape — schema
-│                              first, before code that touches it
+│                              first, before code that touches it.
+│                              Tests in models/tests/ validate all files.
 ├── docs/                      prose documentation, unix format, no tables
-├── scripts/pre-commit.sh      test runner installed as a git hook
+├── scripts/pre-commit.sh      frontend vitest runner (see hook note below)
+├── messaging/                 phone service: POST /send out, normalized
+│   │                          inbound fanout to subscribers, BlueBubbles +
+│   │                          sim transports. Contract: docs/PHONE.md,
+│   │                          run notes: docs/messaging.md
+│   └── tests/
+├── calendar-agent/            Ambiguous Assistant chat smoke script
+│   └── tests/                 (assistant/chat status disputed — see
+│                              SHARED_MEMORY landmines)
+├── agent/                     (planned) the agent core — see
+│                              docs/messaging-plan.md
+├── shared/                    zero-dep helpers shared across services
+│   └── env.js                 .env loader (no override of set vars)
+├── bus/                       reserved, empty
+├── user-interface/            reserved, empty (frontend/ is the real UI)
 └── frontend/                  React + Vite app (self-contained deployable)
     ├── index.html
     ├── package.json
@@ -54,15 +73,21 @@ draggable picture-in-picture tile.
 
 ## 3. Commands
 
+Root tests (backend, node:test): `npm test` from repo root — the glob is
+`'*/tests/*.test.js'`; `node --test <dir>` does not discover tests.
+Messaging service: `node messaging/index.js` (PORT, default 4020)
+Calendar smoke script: `npm run test:calendar` (needs AMBIGUOUS_API_KEY)
 Install deps: `cd frontend && npm install`
 Dev server: `cd frontend && npm run dev`
 Build: `cd frontend && npm run build`
-Tests: `cd frontend && npm test`
+Frontend tests: `cd frontend && npm test`
 Ambiguous CLI: `npx ambiguous@latest catalog` (from repo root — uses
 ./.ambi/config.json)
 
-Verify any frontend change with `npm run build` and `npm test` before
-considering it done.
+Verify any backend change with root `npm test`; verify any frontend
+change with `npm run build` and `npm test` before considering it done.
+Note: the commit hook runs only root `npm test` — run the frontend
+suite yourself before committing frontend changes.
 
 ## 4. Sub-agent roles
 
@@ -93,6 +118,22 @@ Owns the agent visual surface and audio I/O. Swaps the orb for real
 generated video and wires mic to STT, TTS to speaker. The seam is
 `AgentSurface` — keep its props (`agent`, `speaking`) stable.
 
+### 4.5 Messaging / Phone Agent
+Owns `messaging/` — the phone service behind the docs/PHONE.md
+contract. Transports (BlueBubbles, sim, ambimail, LoopMessage/Twilio if
+added) live in `transports.js`; normalization in `normalize.js`;
+fanout/dedup in `index.js`. Invariant: subscribers only ever see the
+normalized inboundMessage shape; transport detail never crosses the
+boundary.
+
+### 4.6 Agent Core Agent
+Owns `agent/` (planned — docs/messaging-plan.md). Consumes normalized
+inbound from the messaging service, owns per-thread state and the data
+model (models/*.schema.json), decides intent, calls Ambiguous through
+its own `agent/ambiguous.js` client, replies via POST /send. Never
+touches a transport directly. The Ambiguous boundary rule applies here
+too: one file fetches Ambiguous.
+
 ## 5. Architecture rules
 
 1. Small state, one owner. `App.jsx` loads the coworker list and holds
@@ -103,8 +144,9 @@ generated video and wires mic to STT, TTS to speaker. The seam is
    `GET /api/users` (type agent). Without one they come from `agents.js`.
    Never hardcode a persona inside a component.
 3. The Ambiguous boundary is explicit: `src/api/ambiguous.js` is the only
-   file that calls fetch. Offline mode must keep the app working
-   end-to-end.
+   frontend file that calls fetch. The backend twin is
+   `agent/ambiguous.js` once the agent core lands. Offline mode must
+   keep the app working end-to-end.
 4. Media is behind a seam. `AgentSurface` renders whatever visual the
    persona defines; the orb today, a video stream later.
 5. Graceful degradation. Camera denied means a placeholder tile and the
@@ -126,7 +168,9 @@ Read it before touching src/api/.
 
 ## 8. Definition of done
 
-`npm run build` and `npm test` pass. The connecting, live, sending, done
-flow still works end-to-end including re-dial and mid-call switching.
-Personas render distinctly. The Ambiguous boundary stays in
-`src/api/ambiguous.js`. No secrets, no dead code.
+Root `npm test` passes (runs on every commit via .githooks). For
+frontend work: `npm run build` and `npm test` pass, and the connecting,
+live, sending, done flow still works end-to-end including re-dial and
+mid-call switching. Personas render distinctly. The Ambiguous boundary
+stays in `src/api/ambiguous.js` (frontend) and `agent/ambiguous.js`
+(backend). No secrets, no dead code.

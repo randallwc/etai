@@ -31,10 +31,13 @@ upward), then ~/.ambi/config.json.
 Tests and hooks
 ---------------
 
+Backend tests run with "npm test" at the root (node --test over
+'*/tests/*.test.js'). A pre-commit hook at .githooks/pre-commit runs
+them on every commit; core.hooksPath=.githooks is set repo-wide.
+
 Frontend tests run with "npm --prefix frontend test" (vitest + v8
 coverage, 80 percent line and branch thresholds on src/api and src/lib).
-A pre-commit hook at scripts/pre-commit.sh runs them on every commit;
-it is installed into .git/hooks/pre-commit. Re-install after a fresh
-clone with:
-
-  cp scripts/pre-commit.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+scripts/pre-commit.sh runs them, but it is not wired into any active
+hook -- core.hooksPath=.githooks means .git/hooks is bypassed, so
+frontend tests currently do not run on commit. Run them manually before
+committing frontend work, or fold that script into .githooks/pre-commit.
