@@ -55,7 +55,7 @@ test("fromMail emits the normalized inbound shape", () => {
   ]);
   assert.equal(msg.channel, "sms");
   assert.equal(msg.body, "sounds good, see you then");
-  assert.equal(msg.externalId, `mail-${mailItem.id}`);
+  assert.equal(msg.externalId, `ambmail-${mailItem.id}`);
   assert.equal(msg.threadKey, "+15550100100");
   assert.equal(msg.receivedAt, "2026-09-12T20:14:07.000Z");
 });
@@ -106,7 +106,7 @@ describe("poller integration", () => {
     assert.equal(recent.length, 1);
     assert.equal(recent[0].channel, "sms");
     assert.equal(recent[0].from, "+15550100100");
-    assert.equal(recent[0].externalId, `mail-${mailItem.id}`);
+    assert.equal(recent[0].externalId, `ambmail-${mailItem.id}`);
     assert.ok(patched.length >= 1);
     assert.ok(patched[0].includes(`/api/mail/${mailItem.id}`));
   });

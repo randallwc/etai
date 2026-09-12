@@ -85,7 +85,7 @@ function fromMail(item, env = {}) {
     channel: "sms",
     from,
     body,
-    externalId: `mail-${item.id}`,
+    externalId: `ambmail-${item.id}`,
     receivedAt: new Date(
       item.received_at ?? item.sent_at ?? Date.now(),
     ).toISOString(),
