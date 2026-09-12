@@ -168,6 +168,34 @@ test("reminder texts the contractor once inside the lead window", async () => {
   }
 });
 
+test("voice turn returns the reply synchronously and still texts the counterparty", async () => {
+  const { server, sent, base, inbound, until } = await serve();
+  try {
+    await inbound("v1", "book a job tomorrow");
+    await inbound("v2", "1");
+    await until(3);
+    const res = await fetch(`${base}/voice/turn`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from: CONTRACTOR, body: "running 20 late" }),
+    });
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.match(json.reply, /shifted/i);
+    assert.equal(sent.length, 4);
+    assert.equal(sent[3].to, CLIENT);
+    assert.match(sent[3].body, /20 min late/i);
+    const bad = await fetch(`${base}/voice/turn`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "hi" }),
+    });
+    assert.equal(bad.status, 400);
+  } finally {
+    server.close();
+  }
+});
+
 test("ai classify parses wrapped JSON and falls back to other on failure", async () => {
   const ai = createAi({
     chat: async () => ({ response: 'Sure! {"intent":"book","dayRef":"thursday"}' }),
