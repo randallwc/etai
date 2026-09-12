@@ -29,7 +29,7 @@ async function waitForReplies(n) {
 }
 
 before(async () => {
-  ({ server, sentLog } = createAgentServer({}));
+  ({ server, sentLog } = createAgentServer({ AGENT_STATE_FILE: "" }));
   await new Promise((r) => server.listen(0, r));
   base = `http://127.0.0.1:${server.address().port}`;
 });
