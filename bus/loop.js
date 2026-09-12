@@ -125,7 +125,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
   async function learnName(phone, name) {
     if (!name || isContractor(phone)) return;
     store.upsertCustomer(phone, { name });
-    await crmSync(phone);
+    crmSync(phone);
   }
 
   function labeledSlots(slots) {
@@ -260,7 +260,14 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
         location: p.location,
         description: `${p.description}\nClient: ${custName ?? "unknown"} ${p.customerPhone}${p.location ? `\nWhere: ${p.location}` : ""}`,
       })
-    );
+    ).catch((e) => {
+      if (e.code === "conflict") return null;
+      throw e;
+    });
+    if (!ev) {
+      await say("That time was just taken —");
+      return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description }, p.mode, p.jobId, say);
+    }
     store.addJob({
       customerId: customer.id,
       contractorId: "contractor",
@@ -518,8 +525,8 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
             } else if (/^(bye|goodbye|that's all|thats all|all set|nothing else|nope|i'm good|im good)\b/i.test(msg.body.trim())) {
               await say("Talk soon!");
             } else if (isContractor(msg.from) && createTask) {
-              const task = await record("create_task", { title: msg.body }, () => createTask(msg.body));
-              await say(`Logged as a task: "${task?.title ?? msg.body}".`);
+              record("create_task", { title: msg.body }, () => createTask(msg.body)).catch(() => {});
+              await say(`Logged as a task: "${msg.body}".`);
             } else {
               await say(intent.say ?? "I can book, move, or cancel a visit - what do you need?");
             }
@@ -544,7 +551,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           ? `My calendar connection needs a new key - ${e.message}.`
           : "My calendar connection needs a new key - tell the contractor.");
       } else {
-        await say("Sorry - I couldn't reach the calendar just now. Try again in a minute.");
+        await say("Sorry - I couldn't reach the calendar just now. Try again in a minute.").catch(() => {});
       }
     }
     return out.reply;

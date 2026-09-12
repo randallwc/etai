@@ -21,7 +21,7 @@ function createBusServer(env = process.env, overrides = {}) {
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
   const tts = overrides.tts !== undefined ? overrides.tts : createTts({ env });
 
-  const notify =
+  let notify =
     overrides.notify ??
     (async ({ to, body }) => {
       if (!messagingUrl) {
@@ -39,6 +39,16 @@ function createBusServer(env = process.env, overrides = {}) {
       console.log(`[bus] sent to ${to} via messaging (${res.status})`);
       return res.json();
     });
+
+  const baseNotify = notify;
+  notify = async (m) => {
+    try {
+      return await baseNotify(m);
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, Number(env.SEND_RETRY_MS ?? 800)));
+      return baseNotify(m);
+    }
+  };
 
   const loop =
     overrides.loop ??
@@ -88,14 +98,18 @@ function createBusServer(env = process.env, overrides = {}) {
     res.end(status === 204 ? undefined : JSON.stringify(payload ?? {}));
   }
 
-  let turn = Promise.resolve();
-  function enqueue(fn) {
-    const p = turn.then(fn);
+  const turns = new Map();
+  function enqueue(key, fn) {
+    const prev = turns.get(key) ?? Promise.resolve();
     const timed = Promise.race([
-      p,
+      prev.then(fn),
       new Promise((_, rej) => setTimeout(() => rej(new Error("turn timeout")), 30_000)),
     ]);
-    turn = timed.catch(() => {});
+    const next = timed.catch(() => {});
+    turns.set(key, next);
+    next.finally(() => {
+      if (turns.get(key) === next) turns.delete(key);
+    });
     return timed;
   }
 
@@ -141,7 +155,13 @@ function createBusServer(env = process.env, overrides = {}) {
         return replyJson(res, 202, { accepted: false, duplicate: true });
       }
       replyJson(res, 202, { accepted: true });
-      enqueue(() => loop.handle(body)).catch((e) => console.error(`loop error: ${e.stack}`));
+      const beat = setTimeout(() => {
+        notify({ to: body.from, body: "On it - checking the schedule now.", threadKey: body.threadKey })
+          .catch(() => {});
+      }, Number(env.WORKING_BEAT_MS ?? 1500));
+      enqueue(body.threadKey, () => loop.handle(body))
+        .catch((e) => console.error(`loop error: ${e.stack}`))
+        .finally(() => clearTimeout(beat));
       return;
     }
     if (path === "/webhooks/calendar") {
@@ -176,7 +196,7 @@ function createBusServer(env = process.env, overrides = {}) {
       if (!store.dedup(msg.externalId)) {
         return replyJson(res, 200, { reply: "", duplicate: true });
       }
-      const reply = await enqueue(() => loop.handle(msg));
+      const reply = await enqueue(msg.threadKey, () => loop.handle(msg));
       return replyJson(res, 200, { reply: reply ?? "" });
     }
     if (path === "/tts") {
