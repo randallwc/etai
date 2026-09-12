@@ -1,0 +1,138 @@
+ETAI(7)                     ETAi Architecture                    ETAI(7)
+
+NAME
+       etai - appointment scheduling for contractors and clients
+       through messaging
+
+OVERVIEW
+       ETAi is a system where clients schedule, reschedule, and
+       cancel appointments with contractors entirely through
+       messages. There is no chat interface and no app for the
+       client to learn. The client texts, the system books.
+
+       The system has three main parts, plus a UI:
+
+       1. msg   - the messaging service
+       2. bus   - the central router
+       3. cal   - the calendar service and its AI agent
+       4. ui    - the video calling platform
+
+PARTS
+
+   msg
+       The messaging service. It owns all inbound and outbound
+       channels: SMS, iMessage, phone calls, and video calls.
+       Both contractors and clients talk to the system through
+       msg. It holds no scheduling logic. Everything it receives
+       goes to the bus. Everything it sends comes from the bus.
+
+   bus
+       The central router. Every message in the system passes
+       through the bus. Nothing talks point to point.
+
+       For now the bus is a plain forwarder. Inbound traffic
+       from msg is forwarded to the calendar AI agent through
+       the cal API. Inbound traffic from cal (notifications,
+       confirmations, questions back to users) is forwarded to
+       msg for delivery.
+
+       In the future the bus earns its keep: it can summarize a
+       conversation before forwarding, enrich a request with
+       weather or travel time, and fan a message out to both
+       msg and cal. The forwarding contract stays the same;
+       the bus just gets smarter about what it sends.
+
+   cal
+       The calendar service. It stores events: location, time,
+       name, and the original requester. It contains its own AI
+       agent, exposed through an API.
+
+       We lean on the cal AI as much as possible. All natural
+       language interpretation, scheduling decisions, conflict
+       handling, and rescheduling live there. The bus does not
+       parse intent. msg does not parse intent. If a message
+       needs understanding, it goes to cal.
+
+   ui
+       A video calling platform. Contractors and clients can
+       talk over video. The ui sends prose (transcripts,
+       summaries of what was said) back to the bus, and the bus
+       forwards that prose to the cal AI, which creates or
+       updates events from it just like a text message.
+
+USERS
+       Contractors are the people who travel to job sites.
+       Clients are the people who contact the system to
+       schedule, reschedule, or cancel appointments.
+
+       Contractors get a daily summary of their schedule in the
+       message channel of their choice.
+
+       Clients get notifications when the contractor is on
+       site, when the contractor is running late, and when an
+       appointment needs to be cancelled or rescheduled.
+
+DATA FLOW
+       Inbound:
+
+           client/contractor -> msg -> bus -> cal AI
+
+       Outbound (notifications, confirmations):
+
+           cal -> bus -> msg -> client/contractor
+
+       Video:
+
+           ui -> bus -> cal AI
+
+       All messages go through the bus. There are no direct
+       connections between msg, cal, and ui.
+
+FUTURE
+       Weather and location integration. Contractors will know
+       when they need to leave for the next job. Clients will
+       know how far away their contractor is. The bus is where
+       this enrichment happens: it can attach weather and
+       travel time to a request before it reaches cal, or
+       summarize and send to both parts at once.
+
+       Other stretch goals live in the README: iMessage, AI
+       voice on phone calls, an Uber-style client UI with ETA
+       and location, parts ordering, and meeting
+       prioritization.
+
+GOTCHAS
+       All messages go through the bus. Do not wire msg to cal
+       directly, even when it looks shorter. The bus is the
+       only place that sees the whole system, which is what
+       lets it add enrichment later without touching the
+       services.
+
+       Scheduling intelligence lives in cal, not the bus. The
+       moment the bus starts parsing intent it becomes a
+       second agent and the two will disagree. Keep the bus
+       dumb about meaning; let it be smart about routing and
+       enrichment only.
+
+       msg is a transport, not a product surface. Formatting a
+       message for SMS vs iMessage is msg's job; deciding what
+       to say is cal's job; deciding where it goes is the
+       bus's job.
+
+TRIED APPROACHES
+       Smart bus from day one: rejected. Letting the bus parse
+       intent and decide what cal should do duplicates the cal
+       AI and gives us two sources of scheduling truth. The
+       plain forwarder keeps one agent in charge while we
+       learn what enrichment the bus actually needs.
+
+       Direct msg -> cal connection: rejected. It saves a hop
+       now but means notifications, video prose, and future
+       weather enrichment each need their own wiring. One
+       router, one place to change.
+
+SEE ALSO
+       README.md in the repository root for MVP scope and
+       stretch goals.
+
+ETAI(7)                     ETAi Architecture                    ETAI(7)
