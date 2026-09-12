@@ -108,6 +108,20 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       : "Nothing on the calendar today.";
   }
 
+  async function clientUpdate(phone) {
+    const nowMs = now().getTime();
+    let sent = 0;
+    for (const p of phone ? [phone] : Object.keys(store.data.customers)) {
+      const job = store.jobForPhone(p);
+      if (!job || job.status !== "confirmed" || new Date(job.window.end).getTime() <= nowMs) continue;
+      await record("client_update", { phone: p, jobId: job.id }, () =>
+        reply(p, `You have ${job.description} ${fmtDay(job.window.start, tz)} at ${fmtTime(job.window.start, tz)}. Reply with a new day or time to move it.`)
+      );
+      sent++;
+    }
+    return { sent };
+  }
+
   async function propose(msg, intent, mode, jobId, say) {
     const duration = intent.durationMinutes ?? 60;
     let date = resolveDayRef(intent.dayRef, tz, now());
@@ -285,7 +299,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     return out.reply;
   }
 
-  return { handle, digest, parseChoice };
+  return { handle, digest, clientUpdate, parseChoice };
 }
 
 module.exports = { createLoop, parseChoice, fmtTime, fmtDay };
