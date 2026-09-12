@@ -4,12 +4,13 @@ const { createEventFromText, parseEventText } = require("../main");
 
 test("parseEventText accepts a text-only event request", () => {
   assert.deepEqual(
-    parseEventText("Team sync | 2026-09-14T10:00:00-07:00 | 90m | review estimates"),
+    parseEventText("Sprinkler repair | 2026-09-14T10:00:00-07:00 | 90m | Rosa Alvarez | +15551234567 | 412 Willow St | Replace leaking valve"),
     {
-      title: "Team sync",
+      title: "Sprinkler repair",
       start_at: "2026-09-14T17:00:00.000Z",
       end_at: "2026-09-14T18:30:00.000Z",
-      description: "review estimates"
+      location: "412 Willow St",
+      description: "Client: Rosa Alvarez\nContact: +15551234567\nRequest: Replace leaking valve"
     }
   );
 });
@@ -22,11 +23,14 @@ test("createEventFromText creates an event after checking the calendar", async (
     if (name === "list_events") return { data: [] };
     return { id: "event-1", ...args };
   };
-  const result = await createEventFromText("Team sync | 2026-09-14T10:00:00-07:00 | 60", { call });
+  const result = await createEventFromText("Sprinkler repair | 2026-09-14T10:00:00-07:00 | 60 | Rosa Alvarez | +15551234567 | 412 Willow St | Replace leaking valve", { call });
   assert.equal(result.status, "created");
   assert.equal(result.event.id, "event-1");
   assert.deepEqual(calls.map(({ name }) => name), ["list_calendars", "list_events", "create_event"]);
   assert.equal(calls[2].args.calendar_id, "cal-1");
+  assert.equal(calls[2].args.location, "412 Willow St");
+  assert.match(calls[2].args.description, /Client: Rosa Alvarez/);
+  assert.match(calls[2].args.description, /Request: Replace leaking valve/);
 });
 
 test("createEventFromText refuses an overlapping event without writing", async () => {
@@ -36,7 +40,7 @@ test("createEventFromText refuses an overlapping event without writing", async (
     if (name === "list_calendars") return { data: [{ id: "cal-1", is_default: true }] };
     return { data: [{ id: "busy", title: "Existing", start_at: "2026-09-14T17:30:00.000Z", end_at: "2026-09-14T18:30:00.000Z" }] };
   };
-  const result = await createEventFromText("Team sync | 2026-09-14T10:00:00-07:00 | 60m", { call });
+  const result = await createEventFromText("Sprinkler repair | 2026-09-14T10:00:00-07:00 | 60m | Rosa Alvarez | +15551234567 | 412 Willow St | Replace leaking valve", { call });
   assert.equal(result.status, "conflict");
   assert.deepEqual(calls, ["list_calendars", "list_events"]);
   assert.equal(result.conflicts[0].id, "busy");
