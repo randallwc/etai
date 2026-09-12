@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import AgentSurface from "./AgentSurface.jsx";
 import { handleRequest, sendConversation } from "../api/ambiguous.js";
+import { voiceTurn } from "../api/bus.js";
 import { isDoneSignal, offlineReply } from "../lib/parseRequest.js";
 
 const SR =
   typeof window !== "undefined"
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
+
+const CALLER = import.meta.env.VITE_DEMO_PHONE || "+15550000001";
 
 export default function CallScreen({ agent, agents, onSwitch, onExit }) {
   const [phase, setPhase] = useState("connecting");
@@ -89,7 +92,9 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     }
 
     setSpeaking(true);
-    const reply = await handleRequest(text).catch(() => null);
+    const reply =
+      (await voiceTurn({ from: CALLER, body: text }).catch(() => null)) ||
+      (await handleRequest(text).catch(() => null));
     setSpeaking(false);
     setTimeout(() => agentSay(reply || offlineReply(text)), 500);
   }

@@ -25,6 +25,11 @@ THE FLOW
     User says what they need (voice/text)
             |
             v
+    Each turn goes to the bus (POST /voice/turn)
+    when VITE_BUS_URL is set, else the local
+    request path in src/api/ambiguous.js
+            |
+            v
     Conversation is packaged and sent
     to Ambiguous.ai for scheduling & planning
 
@@ -72,6 +77,20 @@ POST /api/tasks, and stores the call transcript as a workspace document
 on hang up. Without a key it runs on local fallback personas -- same
 UI.
 
+CALL PATH VIA THE BUS
+---------------------
+
+When VITE_BUS_URL is set, each user turn in a call goes to
+voiceTurn({ from, body }) in src/api/bus.js, which posts to the bus
+service's POST /voice/turn and returns the reply text the agent speaks.
+The caller is identified by VITE_DEMO_PHONE (default +15550000001), so
+the whole call shares one bus thread with the same intents, bookings,
+CRM sync, and contractor notifications as SMS. When VITE_BUS_URL is
+unset or the request fails, voiceTurn returns null and the call falls
+back to the local path: handleRequest in src/api/ambiguous.js plus
+offlineReply from src/lib/parseRequest.js. The call works end-to-end
+with only VITE_AMBIGUOUS_API_KEY set.
+
 ROADMAP
 -------
 
@@ -81,6 +100,8 @@ Done:
   - Freeform request flow (summary, task, scheduling) via text/voice
   - Ambiguous.ai integration layer (coworkers, tasks, calendar,
     transcript handoff)
+  - Call turns routed through the bus voice endpoint when VITE_BUS_URL
+    is set (see docs/bus.md)
 
 Not yet:
 
@@ -88,8 +109,6 @@ Not yet:
   - Real speech-to-text / text-to-speech
   - Animated agent video (visual interpolation)
   - Auth + per-user agent persistence
-  - Routing through the scheduling agent instead of calling Ambiguous directly
-    (see docs/architecture.md)
 
 SEE ALSO
 --------
