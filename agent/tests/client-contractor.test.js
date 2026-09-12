@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { createAgentServer } = require("../index.js");
-const { stubCalendar } = require("../calendar.js");
+const { stubCalendar, resolveDayRef } = require("../calendar.js");
 const { createAi } = require("../ai.js");
 const { createStore } = require("../state.js");
 const { startReminders } = require("../reminders.js");
@@ -191,6 +191,153 @@ test("voice turn returns the reply synchronously and still texts the counterpart
       body: JSON.stringify({ body: "hi" }),
     });
     assert.equal(bad.status, 400);
+  } finally {
+    server.close();
+  }
+});
+
+test("a slot taken between offer and pick is refused and fresh options sent", async () => {
+  const { server, sent, calendar, store, inbound, until } = await serve();
+  try {
+    await inbound("t1", "need sprinklers fixed tomorrow");
+    await until(1);
+    const date = resolveDayRef("tomorrow", "UTC", new Date());
+    const [slot1] = await calendar.proposeSlots({ date, durationMinutes: 60, count: 1 });
+    await calendar.createEvent({ title: "manual hold", start: slot1.start, end: slot1.end });
+
+    await inbound("t2", "1");
+    await until(3);
+    assert.match(sent[1].body, /just taken/i);
+    assert.match(sent[2].body, /reply with a number/i);
+    assert.equal(Object.keys(store.data.jobs).length, 0);
+
+    await inbound("t3", "1");
+    await until(5);
+    assert.match(sent[3].body, /locked in/i);
+    assert.equal(sent[4].to, CONTRACTOR);
+    assert.equal(Object.keys(store.data.jobs).length, 1);
+    const events = await calendar.listDay({ date });
+    assert.equal(events.length, 2);
+  } finally {
+    server.close();
+  }
+});
+
+test("a confirmed job in state blocks a pick the calendar still shows open", async () => {
+  const { server, sent, calendar, store, inbound, until } = await serve();
+  try {
+    await inbound("k1", "need sprinklers fixed tomorrow");
+    await until(1);
+    const date = resolveDayRef("tomorrow", "UTC", new Date());
+    const [slot1] = await calendar.proposeSlots({ date, durationMinutes: 60, count: 1 });
+    store.addJob({
+      customerId: "ghost", contractorId: "k", ambiguousEventId: "phantom",
+      status: "confirmed",
+      window: { start: slot1.start.toISOString(), end: slot1.end.toISOString() },
+      description: "hold", source: "message",
+    });
+    await inbound("k2", "1");
+    await until(3);
+    assert.match(sent[1].body, /just taken/i);
+    assert.equal(Object.keys(store.data.jobs).length, 1);
+    assert.equal((await calendar.listDay({ date })).length, 0);
+  } finally {
+    server.close();
+  }
+});
+
+test("a numeric pick selects the matching option", async () => {
+  const { server, sent, calendar, inbound, until } = await serve();
+  try {
+    await inbound("n1", "need sprinklers fixed tomorrow");
+    await until(1);
+    await inbound("n2", "2");
+    await until(3);
+    assert.match(sent[1].body, /locked in/i);
+    const date = resolveDayRef("tomorrow", "UTC", new Date());
+    const events = await calendar.listDay({ date });
+    assert.equal(events.length, 1);
+    assert.equal(events[0].start, new Date(`${date}T10:30:00Z`).toISOString());
+  } finally {
+    server.close();
+  }
+});
+
+test("an out-of-range number re-asks and the proposal stays alive", async () => {
+  const { server, sent, store, inbound, until } = await serve();
+  try {
+    await inbound("o1", "need sprinklers fixed tomorrow");
+    await until(1);
+    await inbound("o2", "9");
+    await until(2);
+    assert.match(sent[1].body, /which one/i);
+    assert.ok(store.thread(CLIENT).pendingProposal);
+    await inbound("o3", "1");
+    await until(4);
+    assert.match(sent[2].body, /locked in/i);
+    assert.equal(Object.keys(store.data.jobs).length, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("a natural-language pivot inside a proposal starts a new proposal", async () => {
+  const { server, sent, store, calendar, inbound, until } = await serve();
+  try {
+    await inbound("p1", "need sprinklers fixed tomorrow");
+    await until(1);
+    await inbound("p2", "actually can i move it to friday instead");
+    await until(2);
+    assert.match(sent[1].body, /reply with a number/i);
+    const friday = resolveDayRef("friday", "UTC", new Date());
+    const pending = store.thread(CLIENT).pendingProposal;
+    assert.ok(pending.slots[0].start.startsWith(friday));
+    await inbound("p3", "1");
+    await until(4);
+    assert.match(sent[2].body, /locked in/i);
+    assert.equal((await calendar.listDay({ date: friday })).length, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("reschedule moves the one existing event rather than creating a second", async () => {
+  const { server, sent, calendar, store, inbound, until } = await serve();
+  try {
+    await inbound("m1", "book tomorrow");
+    await inbound("m2", "1");
+    await until(3);
+    const date = resolveDayRef("tomorrow", "UTC", new Date());
+    const friday = resolveDayRef("friday", "UTC", new Date());
+    const [job] = Object.values(store.data.jobs);
+    const eventId = job.ambiguousEventId;
+    await inbound("m3", "need to move it to friday");
+    await until(4);
+    await inbound("m4", "1");
+    await until(6);
+    assert.equal((await calendar.listDay({ date })).length, 0);
+    const fri = await calendar.listDay({ date: friday });
+    assert.equal(fri.length, 1);
+    assert.equal(fri[0].id, eventId);
+    assert.equal(Object.keys(store.data.jobs).length, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("a second pick after booking gets a help reply, not a duplicate job", async () => {
+  const { server, sent, store, calendar, inbound, until } = await serve();
+  try {
+    await inbound("d1", "need sprinklers fixed tomorrow");
+    await until(1);
+    await inbound("d2", "1");
+    await until(3);
+    await inbound("d3", "1");
+    await until(4);
+    assert.match(sent[3].body, /can help|what do you need/i);
+    assert.equal(Object.keys(store.data.jobs).length, 1);
+    const date = resolveDayRef("tomorrow", "UTC", new Date());
+    assert.equal((await calendar.listDay({ date })).length, 1);
   } finally {
     server.close();
   }
