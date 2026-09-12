@@ -19,7 +19,7 @@ One boundary per component -- never fetch Ambiguous from anywhere else:
   frontend/src/api/ambiguous.js   browser side: roster, day summary,
                                 booking, transcripts. Degrades to
                                 offline mode with no key.
-  agent/ambiguous.js              agent core: calendar CRUD, tasks,
+  bus/ambiguous.js              agent core: calendar CRUD, tasks,
                                 CRM upsertContact.
   bus/index.js                    inbound prose -> assistant/chat ->
                                 reply texted back out.
@@ -43,7 +43,7 @@ provision-agent until the human verifies); act AS the workspace agent,
 coworker dispatch needs a post-verification persona; availability only
 covers workspace members, never external clients; there is no push path
 for inbound -- polling the mail inbox is it. Full detail:
-docs/ambiguous-integration.md, docs/messaging.md, docs/agent.md.
+docs/ambiguous-integration.md, docs/messaging.md, docs/bus.md.
 
 CopilotKit
 ----------

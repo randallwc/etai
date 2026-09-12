@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { createAgentServer } = require("../index.js");
+const { createBusServer } = require("../index.js");
 const { stubCalendar } = require("../calendar.js");
 
 const CONTRACTOR = "+15550001111";
@@ -15,7 +15,7 @@ function fakeIntent(body) {
 
 async function serve() {
   const sent = [];
-  const { server, store } = createAgentServer(
+  const { server, store } = createBusServer(
     { CONTRACT_PHONE: CONTRACTOR, CONTRACTOR_TZ: "UTC" },
     {
       ai: { classify: async (b) => fakeIntent(b) },

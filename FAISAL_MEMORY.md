@@ -94,7 +94,7 @@ DECISIONS LOCKED WITH THE USER
 NEXT
 ----
 
-  - Agent core is LANDED and tested (docs/agent.md): inbound intake,
+  - Agent core is LANDED and tested (docs/bus.md): inbound intake,
     assistant/chat intents, four flows, notifications, reminders,
     digest, /voice/turn. What remains is a real inbound transport.
   - If a Mac appears: BlueBubbles checklist in docs/messaging.md.

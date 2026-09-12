@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test, before, after } = require("node:test");
-const { createAgentServer } = require("../index.js");
+const { createBusServer } = require("../index.js");
 const { resolveDayRef } = require("../calendar.js");
 const { parseChoice } = require("../loop.js");
 const { extractJson } = require("../ai.js");
@@ -44,7 +44,7 @@ async function waitForReplies(n) {
 }
 
 before(async () => {
-  ({ server } = createAgentServer({}, {
+  ({ server } = createBusServer({}, {
     ai: { classify: async (b) => fakeIntent(b) },
     notify: async ({ to, body }) => {
       sent.push({ to, body });

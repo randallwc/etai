@@ -27,20 +27,20 @@ LAYOUT AND OWNERSHIP
                      for real iMessage, /simulate/inbound to test without
                      a Mac. Contract: models/phone-contract.schema.json,
                      docs/messaging.md
-  agent/             the agent core -- consumes messaging inbound +
-                     /voice/turn, intent via assistant/chat -> Ambiguous ->
-                     reply. Docs: docs/agent.md. Tests: agent/tests/
+  bus/               the one brain: central router + agent core merged
+                     2026-09-13 (agent/ no longer exists). Consumes
+                     messaging inbound + /voice/turn, classifies intent
+                     via assistant/chat, runs the loop in loop.js against
+                     bus/ambiguous.js, replies via messaging /send.
+                     Also: /webhooks/calendar (notify feed -> contractor
+                     text), /internal/digest, /internal/client-update.
+                     Docs: docs/bus.md. Tests: bus/tests/
   models/            JSON Schemas only (*.schema.json), one per shape;
                      includes the agent data model (contractor, customer,
-                     job, agent-action, message) for the agent core
+                     job, agent-action, message) for the bus core
   shared/            zero-dep helpers shared by services (env.js loads
                      .env without overriding set vars)
   docs/              all documents live here; unix format, no tables
-  bus/               central router (the "agent service" in docs/). Today:
-                     /webhooks/inbound forwards prose to Ambiguous
-                     assistant/chat and texts the answer back;
-                     /webhooks/calendar takes calendar notifications and
-                     texts CONTRACT_PHONE via messaging /send
 
 CONVENTIONS
 -----------
@@ -133,7 +133,7 @@ CURRENT GAPS
   - Voice calls: the seam is ready -- POST {agent}/voice/turn takes
     {from, body} and returns {reply} to speak; the caller is not
     texted, counterparties are. A Vapi tool-call or frontend JS maps
-    straight onto it. docs/agent.md has the contract.
+    straight onto it. docs/bus.md has the contract.
   - user-interface/ is empty (frontend/ is the real UI).
 
 AGENT ARCHITECTURE
@@ -144,7 +144,7 @@ models/intent.schema.json), state.js (createStore(file|null); null =
 memory-only for tests), calendar.js (adapter: listDay, proposeSlots,
 createEvent/updateEvent/cancelEvent + resolveDayRef/partsInTz helpers +
 in-memory stubCalendar when no key), reminders.js (pre-job heads-up
-texts). index.js createAgentServer(env, overrides) accepts injected
+texts). index.js createBusServer(env, overrides) accepts injected
 ambi/calendar/ai/store/notify/loop for tests.
 
 Voice seam: loop.handle(msg) returns the reply text when

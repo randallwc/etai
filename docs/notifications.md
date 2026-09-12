@@ -45,7 +45,7 @@ GOTCHAS
 -------
 
 The feed only covers events that HAVE reminders. Events created through
-agent/calendar.js do not set one; those are covered by agent/reminders.js
+bus/calendar.js do not set one; those are covered by bus/reminders.js
 instead, which watches the agent's own job store. The two paths overlap
 deliberately -- one covers Ambiguous-side events (frontend call UI,
 workspace UI), the other agent-booked jobs.

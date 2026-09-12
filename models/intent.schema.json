@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Intent",
-  "description": "Output contract of the agent's AI reader (agent/ai.js, backed by Ambiguous assistant/chat). The model is prompted to return this shape as raw JSON; extra fields are tolerated since LLM output is additive.",
+  "description": "Output contract of the agent's AI reader (bus/ai.js, backed by Ambiguous assistant/chat). The model is prompted to return this shape as raw JSON; extra fields are tolerated since LLM output is additive.",
   "type": "object",
   "required": ["intent"],
   "properties": {

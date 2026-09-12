@@ -1,7 +1,7 @@
-AGENT -- the scheduling brain
+BUS -- the scheduling brain
 =============================
 
-agent/ is the service that answers texts and voice turns. Messaging
+bus/ is the service that answers texts and voice turns. Messaging
 delivers normalized inbound messages to it; it decides what the sender
 wants, calls Ambiguous through its own client, and replies. Client-
 originated changes always notify the contractor; contractor-originated
@@ -11,9 +11,9 @@ beyond per-thread records (pending slot proposals, last intent).
 MODULES
 -------
 
-  index.js      HTTP + wiring. createAgentServer(env, overrides) builds
+  index.js      HTTP + wiring. createBusServer(env, overrides) builds
                 Ambiguous, calendar, ai, store, loop, notify; every piece
-                is injectable for tests. Run: node index.js (:4030).
+                is injectable for tests. Run: node index.js (:4010).
   loop.js       The brain: normalized message -> intent -> calendar
                 tools -> reply. Owns the business logic and the exact
                 reply text. Exports parseChoice/fmtTime/fmtDay helpers.
@@ -99,7 +99,7 @@ default to 60 minutes. Hackathon-simple constants, easy to change.
 ENV
 ---
 
-  PORT                 listen port (default 4030)
+  PORT                 listen port (default 4010)
   MESSAGING_URL        messaging service base URL (send + subscribe)
   PUBLIC_URL           this service's reachable URL for the subscription
   AMBIG_API            Ambiguous ak_ key; unset -> stub calendar in memory
@@ -107,7 +107,7 @@ ENV
   CONTRACT_PHONE       contractor's E.164 number: identifies "the boss",
                        digest + reminder target
   CONTRACTOR_TZ        IANA tz for slot math (default America/Los_Angeles)
-  STATE_FILE           JSON persistence path (default agent/.state.json)
+  STATE_FILE           JSON persistence path (default bus/.state.json)
   REMINDER_LEAD_MINUTES heads-up window (default 30)
 
 The entry point loads repo-root .env via shared/env.js. With
@@ -117,7 +117,7 @@ GOTCHAS
 -------
 
 Dedup runs on both sides of fanout: messaging/ dedups before POSTing,
-the agent dedups again on receipt. Voice turns get a generated
+the bus dedups again on receipt. Voice turns get a generated
 externalId unless the caller passes one; retries with the same id get
 {reply:"", duplicate:true}.
 

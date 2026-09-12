@@ -4,8 +4,8 @@ const { test, before, after } = require("node:test");
 const { createBusServer } = require("../index.js");
 const { createMessagingServer } = require("../../messaging/index.js");
 
-let messaging, bus, calendar, bluebubbles, msgBase;
-const calRequests = [];
+let messaging, bus, ambiguous, bluebubbles, msgBase;
+const ambiHits = [];
 const phoneSends = [];
 
 function post(url, body) {
@@ -13,19 +13,6 @@ function post(url, body) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
-  });
-}
-
-function collect(store, respondWith) {
-  return http.createServer((req, res) => {
-    const chunks = [];
-    req.on("data", (c) => chunks.push(c));
-    req.on("end", () => {
-      store.push({ path: req.url, body: JSON.parse(Buffer.concat(chunks) || "{}") });
-      const [status, payload] = respondWith(req.url);
-      res.writeHead(status, { "content-type": "application/json" });
-      res.end(JSON.stringify(payload));
-    });
   });
 }
 
@@ -43,12 +30,34 @@ async function waitFor(fn) {
 }
 
 before(async () => {
-  calendar = collect(calRequests, () => [
-    200,
-    { response: "You're booked Thursday 2pm.", toolCalls: [{ name: "create_event" }], spear: null, status: "success" },
-  ]);
-  bluebubbles = collect(phoneSends, () => [200, { data: { guid: "bb-out-1" } }]);
-  const calBase = await listen(calendar);
+  ambiguous = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const body = JSON.parse(chunks.length ? Buffer.concat(chunks) : "{}");
+      ambiHits.push({ method: req.method, path: req.url, body });
+      let payload;
+      if (req.url === "/api/assistant/chat") {
+        payload = { response: '{"intent":"day_summary"}', toolCalls: [], spear: null, status: "success" };
+      } else if (req.url.startsWith("/api/calendars/events")) {
+        payload = { data: [] };
+      } else {
+        payload = { data: [] };
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(payload));
+    });
+  });
+  bluebubbles = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      phoneSends.push({ path: req.url, body: JSON.parse(chunks.length ? Buffer.concat(chunks) : "{}") });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ data: { guid: "bb-out-1" } }));
+    });
+  });
+  const ambiBase = await listen(ambiguous);
   const bbBase = await listen(bluebubbles);
 
   messaging = createMessagingServer({
@@ -58,7 +67,7 @@ before(async () => {
   msgBase = await listen(messaging);
 
   bus = createBusServer({
-    AMBIGUOUS_BASE_URL: calBase,
+    AMBIGUOUS_BASE_URL: ambiBase,
     AMBIGUOUS_API_KEY: "ak_test",
     MESSAGING_URL: msgBase,
   }).server;
@@ -70,30 +79,32 @@ before(async () => {
 after(() => {
   messaging.close();
   bus.close();
-  calendar.close();
+  ambiguous.close();
   bluebubbles.close();
 });
 
 test("a text travels messaging -> bus -> calendar ai -> back out as a reply", async () => {
   const res = await post(`${msgBase}/simulate/inbound`, {
     from: "+15557654321",
-    body: "can you come Thursday",
+    body: "what's my day",
   });
   assert.equal(res.status, 202);
 
-  await waitFor(() => calRequests.length === 1);
-  assert.equal(calRequests[0].path, "/api/assistant/chat");
-  assert.equal(calRequests[0].body.message, "can you come Thursday");
+  await waitFor(() => ambiHits.some((h) => h.path === "/api/assistant/chat"));
+  const chat = ambiHits.find((h) => h.path === "/api/assistant/chat");
+  assert.match(chat.body.message, /what's my day/);
+
+  await waitFor(() => ambiHits.some((h) => h.path.startsWith("/api/calendars/events")));
 
   await waitFor(() => phoneSends.length === 1);
   const send = phoneSends[0];
   assert.match(send.path, /^\/api\/v1\/message\/text\?password=pw$/);
   assert.equal(send.body.chatGuid, "any;-;+15557654321");
-  assert.equal(send.body.message, "You're booked Thursday 2pm.");
+  assert.equal(send.body.message, "Nothing on the calendar today.");
 });
 
-test("duplicate delivery through messaging reaches the calendar once", async () => {
-  const before = calRequests.length;
+test("duplicate delivery through messaging reaches the loop once", async () => {
+  const before = ambiHits.filter((h) => h.path === "/api/assistant/chat").length;
   const event = {
     type: "new-message",
     data: {
@@ -106,7 +117,10 @@ test("duplicate delivery through messaging reaches the calendar once", async () 
   };
   await post(`${msgBase}/webhooks/bluebubbles`, event);
   await post(`${msgBase}/webhooks/bluebubbles`, event);
-  await waitFor(() => calRequests.length === before + 1);
+  await waitFor(() => phoneSends.length >= 2);
   await new Promise((r) => setTimeout(r, 50));
-  assert.equal(calRequests.length, before + 1);
+  assert.equal(
+    ambiHits.filter((h) => h.path === "/api/assistant/chat").length,
+    before + 1,
+  );
 });
