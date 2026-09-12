@@ -206,3 +206,57 @@ test("duplicate delivery through messaging reaches the loop once", async () => {
   await new Promise((r) => setTimeout(r, 50));
   assert.match(phoneSends.at(-1).body.message, /don't see an active job/i);
 });
+
+test("a messaging restart wipes subscribers until the bus re-subscribes", async () => {
+  const sinkBodies = [];
+  const sink = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      sinkBodies.push({ path: req.url, body: JSON.parse(chunks.length ? Buffer.concat(chunks) : "{}") });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end("{}");
+    });
+  });
+  const sinkBase = await listen(sink);
+
+  let msg = createMessagingServer({}).server;
+  const restartBase = await listen(msg);
+  const port = msg.address().port;
+  const { subscribeOnce } = createBusServer({
+    MESSAGING_URL: restartBase,
+    PUBLIC_URL: sinkBase,
+  });
+  const healthz = async () => (await fetch(`${restartBase}/healthz`)).json();
+
+  try {
+    assert.equal(await subscribeOnce(), true);
+    assert.equal((await healthz()).subscribers, 1);
+
+    const closing = new Promise((r) => msg.close(r));
+    msg.closeIdleConnections();
+    await closing;
+    msg = createMessagingServer({}).server;
+    await new Promise((r) => msg.listen(port, r));
+    let health;
+    for (let i = 0; i < 100 && !health; i++) {
+      health = await healthz().catch(() => null);
+      if (!health) await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(health?.subscribers, 0);
+
+    assert.equal(await subscribeOnce(), true);
+    assert.equal((await healthz()).subscribers, 1);
+
+    const res = await post(`${restartBase}/simulate/inbound`, { from: CLIENT, body: "test" });
+    assert.equal(res.status, 202);
+    assert.equal((await res.json()).accepted, true);
+    await waitFor(() => sinkBodies.some((s) => s.path === "/webhooks/inbound"));
+    const inbound = sinkBodies.find((s) => s.path === "/webhooks/inbound");
+    assert.equal(inbound.body.from, CLIENT);
+    assert.equal(inbound.body.body, "test");
+  } finally {
+    msg.close();
+    sink.close();
+  }
+});

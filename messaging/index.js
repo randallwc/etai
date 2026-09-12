@@ -74,12 +74,24 @@ function createMessagingServer(env = process.env) {
   async function retryUndelivered() {
     for (let i = undelivered.length - 1; i >= 0; i--) {
       const u = undelivered[i];
-      const delivered = await fanout(u.message);
-      if (delivered) {
+      if (!u || inflight.has(u.message.externalId)) continue;
+      if (seen.has(u.message.externalId)) {
         undelivered.splice(i, 1);
+        continue;
+      }
+      inflight.add(u.message.externalId);
+      let delivered;
+      try {
+        delivered = await fanout(u.message);
+      } finally {
+        inflight.delete(u.message.externalId);
+      }
+      const idx = undelivered.indexOf(u);
+      if (delivered) {
+        if (idx >= 0) undelivered.splice(idx, 1);
         record(u.message);
       } else if (++u.attempts >= retryMax) {
-        undelivered.splice(i, 1);
+        if (idx >= 0) undelivered.splice(idx, 1);
         console.error(`dropping ${u.message.externalId}: undeliverable after ${retryMax} retries`);
       }
     }

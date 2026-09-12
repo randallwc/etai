@@ -107,7 +107,27 @@ LANDMINES
     without the 1 (+4253...) misses jobForPhone lookups silently.
   - agent/ merged into bus/ ("one brain"): the loop, ai, state,
     calendar, and ambiguous client now live in bus/. The agent needs
-    PUBLIC_URL + MESSAGING_URL to self-subscribe to messaging fanout.
+    PUBLIC_URL + MESSAGING_URL to self-subscribe to messaging fanout,
+    and re-subscribes every 30s so a messaging restart does not leave
+    it deaf.
+  - Inbound is never dropped on a dead subscriber: messaging queues
+    undelivered messages and re-fans them every FANOUT_RETRY_MS (5s)
+    up to FANOUT_RETRY_MAX (24) times. accepted:false means "queued,
+    not delivered yet" -- a redelivery of a queued message retries
+    immediately. /healthz shows queued count.
+  - bus/calendar.js is a memory mirror, not a live passthrough: every
+    listDay/proposeSlots/create/update/cancel is local-only. Writes
+    reach Ambiguous on sync() -- at boot, every CALENDAR_SYNC_MS (30s),
+    and on /webhooks/calendar hits. Tests that assert Ambiguous writes
+    MUST call calendar.sync() first. Local ids are stable; remoteIds
+    translate at push, so job.ambiguousEventId stays a local id.
+    CALENDAR=memory forces the zero-API stub even with a key set.
+  - Loop turns serialize through a promise chain in bus/index.js
+    (enqueue) -- a booking text and its slot pick can no longer race.
+    Do not call loop.handle directly from new entry points; go through
+    the same queue.
+  - The stub calendar throws {code:"conflict"} on overlapping writes;
+    apply() returns per-op error results rather than aborting.
   - Frontend -> messaging is cross-origin: messaging answers OPTIONS
     and sets allow-*. If you add a service the UI calls, do the same.
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
@@ -135,13 +155,14 @@ CURRENT GAPS
 
 AGENT ARCHITECTURE
 ----------------
-bus/ is now: index.js (HTTP + wiring), loop.js (intent->tools->reply),
-ai.js (LLM classify via Ambiguous assistant/chat, schema
-models/intent.schema.json), state.js (createStore(file|null); null =
-memory-only for tests), calendar.js (adapter: listDay, proposeSlots,
-createEvent/updateEvent/cancelEvent + resolveDayRef/partsInTz helpers +
-in-memory stubCalendar when no key), reminders.js (pre-job heads-up
-texts). index.js createBusServer(env, overrides) accepts injected
+bus/ is now: index.js (HTTP + wiring + serialized turn queue),
+loop.js (intent->tools->reply), ai.js (LLM classify via Ambiguous
+assistant/chat, schema models/intent.schema.json, keyword fallback on
+timeout), state.js (createStore(file|null); null = memory-only for
+tests), calendar.js (in-memory mirror over stubCalendar + batch
+push/pull sync to Ambiguous; resolveDayRef/partsInTz/findSlots
+helpers), reminders.js (pre-job heads-up texts). index.js
+createBusServer(env, overrides) accepts injected
 ambi/calendar/ai/store/notify/loop for tests.
 
 Voice seam: loop.handle(msg) returns the reply text when
