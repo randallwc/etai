@@ -1,6 +1,6 @@
 const { partsInTz } = require("./calendar.js");
 
-const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "other"];
+const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "other"];
 
 function extractJson(text) {
   const i = text.indexOf("{");
@@ -17,13 +17,14 @@ function prompt(text, todayLabel) {
   return [
     "You are the intent extractor for a contractor's scheduling assistant that works over SMS.",
     "Return ONLY raw JSON matching this shape, no markdown, no prose:",
-    '{"intent":"book|day_summary|running_late|cancel|reschedule|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","slotChoice":0}',
+    '{"intent":"book|day_summary|running_late|cancel|reschedule|eta|other","dayRef":"today|tomorrow|<weekday>|<YYYY-MM-DD>","timePref":"morning|afternoon|evening|HH:MM","durationMinutes":0,"delayMinutes":0,"name":"","description":"","slotChoice":0}',
     "Use null for any field that is absent. Rules:",
     '- "running N late", "behind", "stuck in traffic" -> running_late, delayMinutes=N',
     "- asking about today's or a day's schedule -> day_summary",
     "- wants to book, come by, schedule, get a visit -> book",
     "- wants to move an existing booking -> reschedule",
     "- wants to cancel -> cancel",
+    '- client asking "where are you", ETA, when arriving, how far out -> eta',
     '- picking an offered option ("the first one", "2", "2pm works") -> book with slotChoice set',
     "- anything else -> other",
     `Today is ${todayLabel}.`,
