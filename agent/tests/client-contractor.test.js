@@ -354,4 +354,12 @@ test("ai classify parses wrapped JSON and falls back to other on failure", async
 
   const broken = createAi({ chat: async () => { throw new Error("down"); }, env: {} });
   assert.deepEqual(await broken.classify("hi"), { intent: "other" });
+  assert.equal((await broken.classify("running 20 late")).intent, "running_late");
+  assert.equal((await broken.classify("running 20 late")).delayMinutes, 20);
+  assert.equal((await broken.classify("cancel")).intent, "cancel");
+  assert.equal((await broken.classify("where are you")).intent, "eta");
+  assert.equal((await broken.classify("need a faucet fixed")).intent, "book");
+
+  const garbled = createAi({ chat: async () => ({ response: "no json here" }), env: {} });
+  assert.equal((await garbled.classify("cancel")).intent, "cancel");
 });

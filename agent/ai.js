@@ -32,6 +32,28 @@ function prompt(text, todayLabel) {
   ].join("\n");
 }
 
+/**
+ * Keyword fallback for when the Assistant is unreachable or unconfigured
+ * (no AMBIG_API). Covers the demo-critical intents; everything else is
+ * "other" and hits the loop's help text.
+ */
+function fallbackClassify(text) {
+  const s = text.toLowerCase();
+  const late = s.match(/running\s+(\d+)?\s*(min(?:ute)?s?\s+)?late|behind|stuck in traffic/);
+  if (late) {
+    const mins = s.match(/(\d+)\s*(?:min|late)/)?.[1];
+    return { intent: "running_late", delayMinutes: mins ? +mins : null };
+  }
+  if (/my (day|schedule|route)|schedule today|tomorrow'?s schedule/.test(s)) return { intent: "day_summary" };
+  if (/cancel/.test(s)) return { intent: "cancel" };
+  if (/resched|move|push back|different time/.test(s)) return { intent: "reschedule" };
+  if (/where are you|\beta\b|when.*(here|arrive|coming)|how (far|long)|arriving/.test(s)) return { intent: "eta" };
+  if (/need|book|schedul|appointment|come (by|over|fix)|fix|available|can you/.test(s)) {
+    return { intent: "book", description: text };
+  }
+  return { intent: "other" };
+}
+
 function normalize(raw) {
   if (!raw || !INTENTS.includes(raw.intent)) return { intent: "other" };
   return {
@@ -59,12 +81,13 @@ function createAi({ chat, env = process.env, now = () => new Date() }) {
       const p = partsInTz(tz, now());
       const today = `${p.weekday} ${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
       const res = await chat(prompt(text, today));
-      return normalize(extractJson(res?.response ?? ""));
+      const parsed = extractJson(res?.response ?? "");
+      return parsed ? normalize(parsed) : fallbackClassify(text);
     } catch {
-      return { intent: "other" };
+      return fallbackClassify(text);
     }
   }
-  return { classify, extractJson };
+  return { classify, extractJson, fallbackClassify };
 }
 
 module.exports = { createAi, extractJson };
