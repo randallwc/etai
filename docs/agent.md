@@ -61,12 +61,15 @@ The entry point loads repo-root .env via shared/env.js.
 GOTCHAS
 -------
 
-All state is in-memory: pending bookings, dedup ids, stub events, the
-sent log. Restart and the agent forgets -- acceptable for the demo, noted
-so nobody is surprised.
+State persists to `agent/.state.json` (gitignored) on every mutation:
+pending bookings, dedup ids, customers, jobs, and the AgentAction-style
+tool log. Restart mid-demo keeps half-finished bookings. The stub
+calendar's events stay in-memory.
 
 Ambiguous availability is member-centric: it answers busy slots for the
 contractor's workspace user only. Client calendars are never consulted.
 
-The late flow shifts the event but does not yet text the affected client
-(the job->client-phone link is not modeled); the reply says it will.
+Late and cancel flows text the client only when the event was booked
+through the agent (the job record links the Ambiguous event id to the
+customer's phone). Events created elsewhere have no client phone, so no
+outbound goes out -- the contractor still gets confirmation.

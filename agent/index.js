@@ -1,6 +1,7 @@
 const http = require("node:http");
+const { join } = require("node:path");
 const { parseIntent, resolveDate, toLocalDate } = require("./intent");
-const { createAmbiguous } = require("./ambiguous");
+const { createCalendar } = require("./calendar");
 const store = require("./store");
 
 const WORK_START = 9;
@@ -51,7 +52,8 @@ function openWindows(busy, date, partOfDay) {
 }
 
 function createAgentServer(env = process.env) {
-  const ambi = createAmbiguous(env);
+  store.useFile(env.AGENT_STATE_FILE ?? join(__dirname, ".state.json"));
+  const ambi = createCalendar(env);
   const messagingUrl = env.MESSAGING_URL?.replace(/\/$/, "");
   const contractorPhone = env.CONTRACT_PHONE ?? env.CONTRACTOR_PHONE;
   const sentLog = [];
@@ -86,6 +88,12 @@ function createAgentServer(env = process.env) {
       .sort((a, b) => new Date(a.start) - new Date(b.start))[0];
   }
 
+  async function notifyClient(eventId, body) {
+    const job = store.jobByEventId(eventId);
+    const client = job && store.customerById(job.customerId);
+    if (client) await sendReply(client.phone, body, client.phone);
+  }
+
   async function handle(msg) {
     if (!store.dedup(msg.externalId)) return;
     const intent = parseIntent(msg.body);
@@ -105,9 +113,19 @@ function createAgentServer(env = process.env) {
       if (!ev) return reply("No upcoming job today to shift.");
       const start = new Date(new Date(ev.start).getTime() + intent.minutes * 60000);
       const end = new Date(new Date(ev.end).getTime() + intent.minutes * 60000);
-      await ambi.updateEvent(ev.id, { start: start.toISOString(), end: end.toISOString() });
+      try {
+        const updated = await ambi.updateEvent(ev.id, { start: start.toISOString(), end: end.toISOString() });
+        store.logAction("reschedule_job", { eventId: ev.id, minutes: intent.minutes }, updated);
+      } catch (e) {
+        store.logAction("reschedule_job", { eventId: ev.id, minutes: intent.minutes }, null, e);
+        return reply("Couldn't reach the calendar -- try again in a minute.");
+      }
+      await notifyClient(
+        ev.id,
+        `Heads up: running ${intent.minutes} min late -- new ETA ${fmtTime(start.toISOString())}.`,
+      );
       return reply(
-        `Shifted "${ev.title}" to ${fmtTime(start.toISOString())}. I'll let the client know.`,
+        `Shifted "${ev.title}" to ${fmtTime(start.toISOString())}. Client notified.`,
       );
     }
 
@@ -118,8 +136,18 @@ function createAgentServer(env = process.env) {
       );
       const ev = nextEvent(events);
       if (!ev) return reply("No upcoming job today to cancel.");
-      await ambi.cancelEvent(ev.id);
-      return reply(`Canceled "${ev.title}". Want me to offer the client another slot?`);
+      try {
+        const canceled = await ambi.cancelEvent(ev.id);
+        store.logAction("cancel_job", { eventId: ev.id }, canceled);
+      } catch (e) {
+        store.logAction("cancel_job", { eventId: ev.id }, null, e);
+        return reply("Couldn't reach the calendar -- try again in a minute.");
+      }
+      await notifyClient(
+        ev.id,
+        `"${ev.title}" was canceled. Reply here to rebook.`,
+      );
+      return reply(`Canceled "${ev.title}" and told the client.`);
     }
 
     if (intent.type === "book") {
@@ -129,35 +157,53 @@ function createAgentServer(env = process.env) {
       if (!windows.length) {
         return reply(`No open time ${fmtDay(date)}. Another day?`);
       }
-      const slot = { start: windows[0].start, end: new Date(windows[0].start.getTime() + JOB_MINUTES * 60000) };
+      const slot = {
+        start: windows[0].start.toISOString(),
+        end: new Date(windows[0].start.getTime() + JOB_MINUTES * 60000).toISOString(),
+      };
       store.setPending(msg.threadKey, { slot, customerId: customer.id, summary: msg.body });
+      store.logAction("get_availability", { date }, windows);
       return reply(
-        `I can do ${fmtDay(date)} ${fmtTime(slot.start.toISOString())}-${fmtTime(slot.end.toISOString())}. Confirm?`,
+        `I can do ${fmtDay(date)} ${fmtTime(slot.start)}-${fmtTime(slot.end)}. Confirm?`,
       );
     }
 
     if (intent.type === "confirm") {
       const pending = store.pending(msg.threadKey);
       if (!pending) return reply("Nothing to confirm -- tell me what you need.");
-      await ambi.createEvent({
-        title: pending.summary.slice(0, 60),
-        start: pending.slot.start.toISOString(),
-        end: pending.slot.end.toISOString(),
-        description: `booked via text from ${msg.from}`,
-      });
+      let created;
+      try {
+        created = await ambi.createEvent({
+          title: pending.summary.slice(0, 60),
+          start: pending.slot.start,
+          end: pending.slot.end,
+          description: `booked via text from ${msg.from}`,
+        });
+        store.logAction("book_job", { slot: pending.slot, customer: customer.id }, created);
+      } catch (e) {
+        store.logAction("book_job", { slot: pending.slot, customer: customer.id }, null, e);
+        return reply("Couldn't reach the calendar -- try again in a minute.");
+      }
       store.addJob({
         customerId: customer.id,
-        ambiguousEventId: null,
+        ambiguousEventId: created?.id ?? null,
         status: "confirmed",
-        window: { start: pending.slot.start.toISOString(), end: pending.slot.end.toISOString() },
+        window: pending.slot,
         address: "",
         description: pending.summary,
         source: "message",
         eta: null,
       });
       store.clearPending(msg.threadKey);
+      if (contractorPhone && msg.from !== contractorPhone) {
+        await sendReply(
+          contractorPhone,
+          `New booking: ${fmtDay(toLocalDate(new Date(pending.slot.start)))} ${fmtTime(pending.slot.start)} -- ${pending.summary.slice(0, 40)}`,
+          contractorPhone,
+        );
+      }
       return reply(
-        `Booked ${fmtDay(toLocalDate(pending.slot.start))} at ${fmtTime(pending.slot.start.toISOString())}. See you then.`,
+        `Booked ${fmtDay(toLocalDate(new Date(pending.slot.start)))} at ${fmtTime(pending.slot.start)}. See you then.`,
       );
     }
 
