@@ -46,6 +46,9 @@ CONVENTIONS
 -----------
 
   - JavaScript CommonJS, no dependencies. Platform fetch/http only.
+    Exception: bus/ carries @copilotkit/runtime (bus/package.json) for
+    the CopilotKit agent path; bus/copilot.js still loads it lazily so
+    the service runs without node_modules installed.
   - Tests: node:test files under <component>/tests/*.test.js. `npm test`
     globs that pattern -- tests must match it or they do not run.
     calendar-agent/test.js is a manual smoke script, not a unit test; the
@@ -56,8 +59,10 @@ CONVENTIONS
   - Never commit secrets. Keys live in repo-root .env (gitignored);
     services load it via shared/env.js loadEnv() in their entry point.
     Names in use: AMBIG_API, AMBIGUOUS_API_KEY, COPILOT_API,
+    COPILOT_AGENT, COPILOT_MODEL, COPILOT_RUN_TIMEOUT_MS,
     CONTRACT_PHONE, CLIENT_PHONE, BUS_URL, GATEWAY_MAP, ALLOWED_FROM,
     UNDELIVERED_FILE (see .env.example).
+    COPILOT_API is a cpk- Intelligence project key, not an LLM key.
 
 VERIFIED AMBIGUOUS API (live-tested 2026-09-12, workspace etai-workspace)
 -------------------------------------------------------------------------
@@ -161,14 +166,18 @@ CURRENT GAPS
 AGENT ARCHITECTURE
 ----------------
 bus/ is now: index.js (HTTP + wiring + serialized turn queue),
-loop.js (intent->tools->reply), ai.js (LLM classify via Ambiguous
+loop.js (intent->tools->reply; console, voice, and copilot fallback),
+copilot.js (CopilotKit BuiltInAgent path for sms+imessage; tools wrap
+calendar/store/notify, schema models/copilot-agent.schema.json;
+enabled by COPILOT_MODEL/LLM key, or COPILOT_AGENT=on for the Ambiguous
+assistant/chat factory), ai.js (LLM classify via Ambiguous
 assistant/chat, schema models/intent.schema.json, keyword fallback on
 timeout), state.js (createStore(file|null); null = memory-only for
 tests), calendar.js (in-memory mirror over stubCalendar + batch
 push/pull sync to Ambiguous; resolveDayRef/partsInTz/findSlots
 helpers), reminders.js (pre-job heads-up texts). index.js
 createBusServer(env, overrides) accepts injected
-ambi/calendar/ai/store/notify/loop for tests.
+ambi/calendar/ai/store/notify/loop/copilot for tests.
 
 Voice seam: loop.handle(msg) returns the reply text when
 msg.channel === "voice" instead of texting it to the caller; index.js

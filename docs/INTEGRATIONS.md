@@ -48,22 +48,21 @@ docs/ambiguous-integration.md, docs/messaging.md, docs/bus.md.
 CopilotKit
 ----------
 
-Not installed -- a documented stretch path for a dispatcher demo board,
-and deliberately nothing in the MVP depends on it. The product surface
-is the phone; a board is presentation only.
+Installed in bus/ (@copilotkit/runtime 1.70.1, /v2 subpath). It is the
+brain for sms and imessage, not the phone pipe: bus/copilot.js turns
+each normalized inbound into a BuiltInAgent run whose tools wrap the
+existing calendar/store/notify boundaries. Classic mode needs one LLM
+provider key; without one, COPILOT_AGENT=on runs factory mode over
+Ambiguous assistant/chat. Full research and rejected approaches:
+docs/copilotkit.md. COPILOT_API in .env is the cpk- Intelligence
+project key (threads/inspector), not an LLM key.
 
-If it gets built, the recipe (from docs/API.md): CopilotKit v2,
-CopilotRuntime with BuiltInAgent mounted inside the existing Node app,
-React page under a CopilotKit provider with no chat component, useAgent
-to render job state and useRenderTool to draw each tool call as a status
-card. /v2 subpath imports throughout -- most tutorials still show the
-deprecated v1 API. Needs Node 20+ and one LLM key; no CopilotKit
-account. COPILOT_API is already reserved in .env.example.
-
-The structural caveat: AG-UI state is run-scoped, not broadcast. The
-board does not update on its own -- each inbound message that should
-move a card must trigger a run server-side, so the agent loop posts
-into the runtime rather than the runtime watching the loop.
+Still unbuilt: the dispatcher demo board. The recipe stands --
+CopilotRuntime handler mounted inside the bus, React page under a
+CopilotKit provider with no chat component, useAgent for job state,
+useRenderTool for status cards. The structural caveat holds: AG-UI
+state is run-scoped, so the board only moves when an inbound message
+triggers a run.
 
 Rejected uses, so nobody re-litigates them: CopilotKit Channels for
 messaging (no shipped SMS/iMessage adapter; the WhatsApp one needs Meta

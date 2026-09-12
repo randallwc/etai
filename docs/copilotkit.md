@@ -105,6 +105,14 @@ send_text, create_task. The agent keeps conversation state per threadKey,
 so a slot proposal survives across texts without the pendingProposal
 state machine.
 
+Enablement is deliberately conservative. A configured model
+(COPILOT_MODEL or a provider key) turns the path on. With no model,
+COPILOT_AGENT=on opts into factory mode over Ambiguous assistant/chat;
+without it the channels stay on loop.js. That keeps every environment
+that fakes Ambiguous in tests on the deterministic loop unless it asks
+for the agent, and it keeps a partially-configured deploy from
+half-answering texts.
+
 TRIED AND REJECTED
 ------------------
 

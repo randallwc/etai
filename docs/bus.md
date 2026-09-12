@@ -14,9 +14,16 @@ MODULES
   index.js      HTTP + wiring. createBusServer(env, overrides) builds
                 Ambiguous, calendar, ai, store, loop, notify; every piece
                 is injectable for tests. Run: node index.js (:4010).
-  loop.js       The brain: normalized message -> intent -> calendar
-                tools -> reply. Owns the business logic and the exact
-                reply text. Exports parseChoice/fmtTime/fmtDay helpers.
+  loop.js       The classic brain: normalized message -> intent ->
+                calendar tools -> reply. Owns the business logic and the
+                exact reply text. Handles console and voice, and is the
+                fallback when copilot.js is not enabled.
+  copilot.js    The CopilotKit brain for sms and imessage: each inbound
+                becomes a BuiltInAgent run whose tools wrap calendar,
+                store, notify, and createTask. Classic mode needs
+                COPILOT_MODEL or an LLM provider key; COPILOT_AGENT=on
+                with no model runs factory mode over Ambiguous
+                assistant/chat. Details in docs/copilotkit.md.
   ai.js         Intent classification via Ambiguous assistant/chat --
                 asks for a JSON intent object (models/intent.schema.json)
                 and extracts it with a tolerant parser. A failed or
@@ -46,7 +53,9 @@ ENDPOINTS
 POST /webhooks/inbound -- the normalized message shape from
 models/phone-contract.schema.json. Dedups on externalId, answers 202,
 then processes async. This is the subscription target messaging/ fans
-out to; never block it on the LLM or Ambiguous.
+out to; never block it on the LLM or Ambiguous. Channels sms and
+imessage route to copilot.js when it is enabled; everything else (and
+any disabled-copilot message) goes to loop.js.
 
 POST /voice/turn -- the voice integration seam. Body:
 
@@ -86,7 +95,7 @@ models/board-state.schema.json: { jobs, customers, actions } as arrays
 straight from the store. Read-only; there is no auth, so it is for
 localhost and demo use only -- do not expose it on a public URL.
 
-GET /healthz -- { ok, stub, ambiguous, messaging }.
+GET /healthz -- { ok, stub, ambiguous, messaging, tts, copilot }.
 
 INTENTS
 -------
@@ -127,6 +136,13 @@ ENV
   CONTRACTOR_TZ        IANA tz for slot math (default America/Los_Angeles)
   STATE_FILE           JSON persistence path (default bus/.state.json)
   REMINDER_LEAD_MINUTES heads-up window (default 30)
+  COPILOT_AGENT        "on" opts into the copilot.js factory path when
+                       no model key exists; "off" forces loop.js
+  COPILOT_MODEL        provider/model string (openai/gpt-4.1-mini, ...)
+                       or auto-picked from an LLM provider key
+  OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY
+                       enable BuiltInAgent classic mode
+  COPILOT_RUN_TIMEOUT_MS per-run cap (default 90000)
 
 The entry point loads repo-root .env via shared/env.js. With
 MESSAGING_URL unset, outbound replies are logged instead of sent.
@@ -175,3 +191,10 @@ timeline note when the client has ambiguousCrmId, and a linked
 follow-up task due the job day. Each step is non-fatal; failures land
 in packet.errors (models/job-packet.schema.json) and the packet is
 stored on the job record so GET /state surfaces it to the console.
+
+CopilotKit runs are serialized per threadKey by the enqueue queue in
+index.js (longer bound for copilot, COPILOT_RUN_TIMEOUT_MS + 5s) and by
+a chain inside copilot.js, because one BuiltInAgent instance refuses a
+second concurrent run. Both timeouts unref their timers -- without that
+every turn would hold the event loop until the cap, and the test suite
+would stall a full timeout per run.

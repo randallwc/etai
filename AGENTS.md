@@ -118,6 +118,7 @@ draggable picture-in-picture tile.
 │   │                          Docs: docs/bus.md
 │   ├── index.js               HTTP + wiring (createBusServer)
 │   ├── loop.js                intent -> calendar tools -> reply
+│   ├── copilot.js             CopilotKit agent path for sms+imessage
 │   ├── ai.js                  assistant/chat intent classification
 │   ├── calendar.js            calendar adapter + stub fallback
 │   ├── state.js               threads/jobs/customers/dedup/action log
