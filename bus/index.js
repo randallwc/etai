@@ -7,6 +7,8 @@ function createBusServer(env = process.env) {
   const base = (env.AMBIGUOUS_BASE_URL ?? "https://app.ambiguous.ai").replace(/\/$/, "");
   const apiKey = env.AMBIG_API ?? env.AMBIGUOUS_API_KEY;
   const messagingUrl = env.MESSAGING_URL?.replace(/\/$/, "");
+  const contractorPhone = env.CONTRACT_PHONE ?? env.CONTRACTOR_PHONE;
+  const tz = env.CONTRACTOR_TZ;
   const seen = new Set();
 
   function dedup(externalId) {
@@ -30,6 +32,7 @@ function createBusServer(env = process.env) {
   }
 
   async function askCalendar(text) {
+    console.log(`[bus] asking calendar at ${base}`);
     const res = await fetch(`${base}/api/assistant/chat`, {
       method: "POST",
       headers: {
@@ -38,15 +41,39 @@ function createBusServer(env = process.env) {
         "API-Version": "1",
       },
       body: JSON.stringify({ message: text, context: { audience: "agent" } }),
+      signal: AbortSignal.timeout(60000),
     });
-    const data = await res.json().catch(() => null);
+    console.log(`[bus] calendar responded ${res.status}`);
+    const raw = await res.text().catch(() => "");
+    console.log(`[bus] body read, ${raw.length} bytes`);
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {}
     if (!res.ok || data?.status === "error" || typeof data?.response !== "string") {
       throw new Error(`assistant chat failed (${res.status})`);
     }
     return data.response;
   }
 
+  function fmtWhen(iso) {
+    if (!iso) return "soon";
+    return new Date(iso).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      ...(tz ? { timeZone: tz } : {}),
+    });
+  }
+
+  async function notifyContractor(n) {
+    const label = n.kind === "reminder" ? "Reminder" : `Calendar ${n.kind ?? "update"}`;
+    const text = `${label}: ${n.title} at ${fmtWhen(n.startAt ?? n.triggerAt)}`;
+    if (!contractorPhone) return console.log(`[bus] ${text} (CONTRACT_PHONE unset)`);
+    await reply(contractorPhone, text, contractorPhone);
+  }
+
   async function forward(message) {
+    console.log(`[bus] forwarding "${message.body}" from ${message.from}`);
     let answer = FALLBACK;
     if (apiKey) {
       try {
@@ -55,6 +82,7 @@ function createBusServer(env = process.env) {
         console.error(`[bus] calendar ai failed: ${e.message}`);
       }
     }
+    console.log(`[bus] replying to ${message.from}`);
     await reply(message.from, answer, message.threadKey ?? message.from);
   }
 
@@ -87,12 +115,26 @@ function createBusServer(env = process.env) {
         messaging: messagingUrl ?? null,
       });
     }
-    if (req.method !== "POST" || pathname !== "/webhooks/inbound") {
+    if (
+      req.method !== "POST" ||
+      (pathname !== "/webhooks/inbound" && pathname !== "/webhooks/calendar")
+    ) {
       return respond(res, 404, { error: { code: "invalid", message: "not found" } });
     }
     const body = await readBody(req).catch(() => null);
     if (body === null) {
       return respond(res, 400, { error: { code: "invalid", message: "body must be json" } });
+    }
+    if (pathname === "/webhooks/calendar") {
+      if (typeof body.id !== "string" || !body.id || typeof body.title !== "string" || !body.title) {
+        return respond(res, 400, { error: { code: "invalid", message: "id and title required" } });
+      }
+      if (!dedup(`cal:${body.id}`)) {
+        return respond(res, 202, { accepted: false });
+      }
+      respond(res, 202, { accepted: true });
+      notifyContractor(body).catch((e) => console.error(`[bus] calendar notify failed: ${e.message}`));
+      return;
     }
     if (
       typeof body.body !== "string" || !body.body ||
