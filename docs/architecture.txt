@@ -91,7 +91,7 @@ MODELS
        phone-contract (inbound message shape), calendar-contract
        and calendar-event, assistant-chat-response,
        call-transcript, ambiguous-user, persona, task. Per
-       AGENT.md, schemas land before the code that uses them.
+       AGENTS.md, schemas land before the code that uses them.
 
 DATA FLOW
        Inbound, as wired today:
