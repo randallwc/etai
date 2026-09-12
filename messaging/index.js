@@ -6,9 +6,11 @@ const { fromBlueBubbles, fromSim, fromAmbiguousMail, toE164 } = require("./norma
 const SEEN_CAP = 5000;
 const RECENT_CAP = 200;
 const RETRY_CAP = 500;
+const MAX_BODY = 1 << 20;
 
 function createMessagingServer(env = process.env) {
   const transport = createTransport(env);
+  const fetchTimeout = Number(env.FETCH_TIMEOUT_MS ?? 8000);
   const subscribers = new Set();
   if (env.UPSTREAM_URL) {
     subscribers.add(`${env.UPSTREAM_URL.replace(/\/$/, "")}/webhooks/inbound`);
@@ -34,6 +36,7 @@ function createMessagingServer(env = process.env) {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(message),
+            signal: AbortSignal.timeout(fetchTimeout),
           });
           return res.ok;
         } catch (e) {
@@ -85,7 +88,15 @@ function createMessagingServer(env = process.env) {
   function readBody(req) {
     return new Promise((resolve, reject) => {
       const chunks = [];
-      req.on("data", (c) => chunks.push(c));
+      let size = 0;
+      req.on("data", (c) => {
+        size += c.length;
+        if (size > MAX_BODY) {
+          reject(Object.assign(new Error("body too large"), { status: 413 }));
+        } else {
+          chunks.push(c);
+        }
+      });
       req.on("end", () => {
         try {
           resolve(chunks.length ? JSON.parse(Buffer.concat(chunks)) : {});
@@ -125,7 +136,14 @@ function createMessagingServer(env = process.env) {
     if (req.method !== "POST") {
       return reply(res, 404, { error: { code: "invalid", message: "not found" } });
     }
-    const body = await readBody(req);
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (e) {
+      return reply(res, e.status ?? 400, {
+        error: { code: "invalid", message: e.status ? "body too large" : "malformed json" },
+      });
+    }
     if (path === "/send") {
       const to = body.to ? toE164(body.to) : null;
       if (!to || !/^\+[1-9]\d{6,14}$/.test(to) || typeof body.body !== "string" || !body.body) {
@@ -152,6 +170,7 @@ function createMessagingServer(env = process.env) {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout(fetchTimeout),
           }).catch((e) => console.error(`calendar event to ${target} failed: ${e.message}`));
         }
       }

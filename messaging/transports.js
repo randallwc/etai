@@ -3,6 +3,7 @@ const { randomUUID } = require("node:crypto");
 function bluebubbles(env) {
   const base = env.BLUEBUBBLES_URL.replace(/\/$/, "");
   const password = env.BLUEBUBBLES_PASSWORD;
+  const timeout = Number(env.FETCH_TIMEOUT_MS ?? 8000);
   return {
     name: "bluebubbles",
     async send({ to, body }) {
@@ -11,6 +12,7 @@ function bluebubbles(env) {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
+          signal: AbortSignal.timeout(timeout),
           body: JSON.stringify({
             chatGuid: `any;-;${to}`,
             tempGuid: `etai-${randomUUID()}`,
@@ -44,6 +46,7 @@ function ambimail(env) {
         return [key10, domains.split("+").map((d) => d.trim()).filter(Boolean)];
       })
   );
+  const timeout = Number(env.FETCH_TIMEOUT_MS ?? 8000);
   return {
     name: "ambimail",
     async send({ to, body }) {
@@ -59,6 +62,7 @@ function ambimail(env) {
                 "content-type": "application/json",
                 authorization: `Bearer ${key}`,
               },
+              signal: AbortSignal.timeout(timeout),
               body: JSON.stringify({
                 to: [`${digits}@${d}`],
                 subject: "ETAi",

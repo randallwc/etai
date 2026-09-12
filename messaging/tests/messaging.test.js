@@ -115,6 +115,60 @@ test("ambimail send succeeds when some gateways reject", async () => {
   }
 });
 
+test("POST bodies over the cap get 413, malformed JSON gets 400", async () => {
+  const big = await post(`${base}/send`, { to: "+15551234567", body: "x".repeat(1 << 20) });
+  assert.equal(big.status, 413);
+  const bad = await fetch(`${base}/send`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{not json",
+  });
+  assert.equal(bad.status, 400);
+});
+
+test("a hanging subscriber fails the fanout fast instead of stalling the ack", async () => {
+  const hung = http.createServer(() => {});
+  await new Promise((r) => hung.listen(0, "127.0.0.1", r));
+  const srv = createMessagingServer({
+    FETCH_TIMEOUT_MS: "80",
+    UPSTREAM_URL: `http://127.0.0.1:${hung.address().port}`,
+  }).server;
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const loneBase = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const t0 = Date.now();
+    const res = await post(`${loneBase}/simulate/inbound`, { from: "+15557654321", body: "hi" });
+    assert.equal(res.status, 503);
+    assert.ok(Date.now() - t0 < 2000, "fanout did not honor the timeout");
+  } finally {
+    srv.close();
+    hung.closeAllConnections();
+    hung.close();
+  }
+});
+
+test("one hung subscriber does not block delivery to a healthy one", async () => {
+  const hung = http.createServer(() => {});
+  await new Promise((r) => hung.listen(0, "127.0.0.1", r));
+  const srv = createMessagingServer({
+    FETCH_TIMEOUT_MS: "80",
+    UPSTREAM_URL: `http://127.0.0.1:${hung.address().port}`,
+  }).server;
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const loneBase = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const before = received.length;
+    await post(`${loneBase}/subscriptions`, { url: `${upstreamBase}/webhooks/inbound` });
+    const res = await post(`${loneBase}/simulate/inbound`, { from: "+15557654321", body: "hi" });
+    assert.equal(res.status, 202);
+    assert.equal(received.length, before + 1);
+  } finally {
+    srv.close();
+    hung.closeAllConnections();
+    hung.close();
+  }
+});
+
 test("send returns an externalId and rejects a bad phone", async () => {
   const ok = await post(`${base}/send`, { to: "+15551234567", body: "ETA 10:20" });
   assert.equal(ok.status, 200);

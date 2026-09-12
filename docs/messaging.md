@@ -27,9 +27,12 @@ Receive messages -- POST {MESSAGING_URL}/subscriptions
   Subscribe once at startup. Every inbound message is then POSTed to every
   subscriber as the normalized shape in models/phone-contract.schema.json
   ($defs.inboundMessage): channel, from, body, externalId, receivedAt,
-  threadKey. Fanout is fire-and-forget -- if your endpoint is down the
-  message still exists in the service's recent log (GET /messages) but is
-  not redelivered, so subscribe before traffic starts.
+  threadKey. The webhook ack waits for fanout, bounded by FETCH_TIMEOUT_MS
+  per subscriber -- a slow endpoint cannot stall the ack past the timeout
+  and never blocks delivery to the healthy ones. If no subscriber accepts,
+  the message is queued in memory and retried every FANOUT_RETRY_MS up to
+  FANOUT_RETRY_MAX times; /simulate/inbound still reports 503 so a manual
+  caller knows it did not land yet.
 
   Alternatively set UPSTREAM_URL on the service; it subscribes
   {UPSTREAM_URL}/webhooks/inbound automatically.
@@ -65,6 +68,13 @@ its entry point -- keep it out of library code so tests stay hermetic.
   CARRIER_GATEWAY       defaults to vtext.com
   MAIL_POLL_SECONDS     inbox poll interval (default 15; 0 disables)
   MAIL_POLL_LIMIT       inbox page size per poll (default 20)
+  FETCH_TIMEOUT_MS      ceiling on every outbound fetch -- subscriber
+                        fanout, transport sends, mail poll calls
+                        (default 8000)
+  FANOUT_RETRY_MS       redelivery interval for the undelivered queue
+                        (default 5000)
+  FANOUT_RETRY_MAX      attempts before a queued message is dropped
+                        (default 24)
 
 Transport selection: bluebubbles (both vars) -> ambimail (AMBIG_API) ->
 sim. ambimail delivers outbound texts by sending Ambiguous workspace mail
@@ -121,7 +131,9 @@ carrier gateway domains -- vtext.com, vzwpix.com, vmobl.com, txt.att.net,
 messaging.sprintpcs.com, tmomail.net, and friends, plus whatever
 CARRIER_GATEWAY names. A ten-digit local part becomes +1<number>. Mail
 from ordinary addresses is logged once and skipped; it is left unread so
-a human still sees it.
+a human still sees it. Skipped ids are remembered in memory (capped at
+5000, oldest evicted) so the same non-gateway mail is not re-normalized
+on every poll; a restart simply re-logs it once.
 
 The body is the first non-quoted block of body_text: lines starting with
 ">", an "On ... wrote:" header, separator runs, or "Sent from my ..."
@@ -137,10 +149,15 @@ email-to-SMS hop. Channel is "sms", not "imessage". The unread filter
 plus mark-read ack means a restart does not re-emit, but in-memory dedup
 still covers a mark-read failure. Polling is independent of the
 /webhooks/ambimail push path; if both are live the shared dedup
-collapses an email that arrives twice.
+collapses an email that arrives twice. Polls are serialized: a poll that
+outlasts MAIL_POLL_SECONDS short-circuits the overlapping tick instead of
+stacking concurrent inbox scans.
 
 GOTCHAS
 -------
+
+POST bodies are capped at 1 MiB; over that the service drains the upload
+and replies 413. Malformed JSON gets 400, not 500.
 
 BlueBubbles echoes our own sends as new-message events with isFromMe=true;
 they are filtered before fanout or your agent will answer itself.
