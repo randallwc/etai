@@ -1,6 +1,8 @@
 const { resolveDayRef } = require("./calendar.js");
 const { extractFields } = require("./ai.js");
 
+const PROPOSAL_TTL_MS = 30 * 60000;
+
 const ORDINALS = {
   first: 1, "1st": 1, second: 2, "2nd": 2, third: 3, "3rd": 3, fourth: 4, "4th": 4,
 };
@@ -229,7 +231,6 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       return propose(msg, { dayRef: slotDate, durationMinutes: durMin, description: p.description, location: p.location }, p.mode, p.jobId, say);
     }
     const customer = store.upsertCustomer(p.customerPhone, {});
-    crmSync(p.customerPhone).catch(() => {});
     if (p.mode === "reschedule" && p.jobId) {
       const job = store.data.jobs[p.jobId];
       await record("reschedule_job", { jobId: p.jobId, slot }, () =>
@@ -238,10 +239,11 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       job.window = slot;
       store.save();
       store.setThread(msg.threadKey, { pendingProposal: null });
-      await say(`Done - moved to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`);
-      if (!isContractor(msg.from)) {
-        await tellContractor(`Client moved ${p.description} to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`);
-      }
+      await Promise.all([
+        say(`Done - moved to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`),
+        !isContractor(msg.from) &&
+          tellContractor(`Client moved ${p.description} to ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}.`),
+      ]);
       return;
     }
     const dupe = (await record("check_calendar", { date: slotDate }, () =>
@@ -278,10 +280,11 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       source: msg.channel === "voice" ? "call" : "message",
     });
     store.setThread(msg.threadKey, { pendingProposal: null });
-    await say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.`);
-    if (!isContractor(msg.from)) {
-      await tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.`);
-    }
+    await Promise.all([
+      say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.`),
+      !isContractor(msg.from) &&
+        tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.`),
+    ]);
   }
 
   async function runningLate(msg, intent, say) {
@@ -299,14 +302,15 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     job.eta = start;
     store.save();
     const cust = Object.values(store.data.customers).find((c) => c.id === job.customerId);
-    if (cust) {
-      await notify({
-        to: cust.phone,
-        body: `Running about ${mins} min late - new ETA ${fmtTime(start, tz)}. Sorry for the wait.`,
-        threadKey: cust.phone,
-      });
-    }
-    await say(`Updated - shifted ${job.description} by ${mins} min and let them know.`);
+    await Promise.all([
+      cust &&
+        notify({
+          to: cust.phone,
+          body: `Running about ${mins} min late - new ETA ${fmtTime(start, tz)}. Sorry for the wait.`,
+          threadKey: cust.phone,
+        }),
+      say(`Updated - shifted ${job.description} by ${mins} min and let them know.`),
+    ]);
   }
 
   const DESC_STOP = new Set([
@@ -373,13 +377,17 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     const label = `${job.description} ${fmtDay(job.window.start, tz)}`;
     if (isContractor(msg.from)) {
       const cust = Object.values(store.data.customers).find((c) => c.id === job.customerId);
-      if (cust) {
-        await notify({ to: cust.phone, body: `Sorry, ${label} needs to be canceled. Reply here and I'll find you a new time.`, threadKey: cust.phone });
-      }
-      return say(`Canceled ${label} and told them.`);
+      await Promise.all([
+        cust &&
+          notify({ to: cust.phone, body: `Sorry, ${label} needs to be canceled. Reply here and I'll find you a new time.`, threadKey: cust.phone }),
+        say(`Canceled ${label} and told them.`),
+      ]);
+      return;
     }
-    await say(`Canceled ${label}. If you want to rebook, just say so.`);
-    await tellContractor(`Client canceled ${label} - that slot is free.`);
+    await Promise.all([
+      say(`Canceled ${label}. If you want to rebook, just say so.`),
+      tellContractor(`Client canceled ${label} - that slot is free.`),
+    ]);
   }
 
   async function bookReply(msg, thread, say) {
@@ -416,6 +424,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
       durationMinutes: intent.durationMinutes ?? null,
       location: intent.location ?? null,
       customerPhone: msg.from,
+      createdAt: now().toISOString(),
     };
   }
 
@@ -430,12 +439,18 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
     };
     try {
       if (thread.pendingProposal) {
-        const slots = thread.pendingProposal.slots;
-        const stale = slots.every((s) => new Date(s.start) <= now());
-        if (stale && !parseChoice(msg.body, slots, tz)) {
+        const p = thread.pendingProposal;
+        const stale =
+          p.slots.every((s) => new Date(s.start) <= now()) ||
+          now() - new Date(p.createdAt ?? 0) > PROPOSAL_TTL_MS;
+        if (stale && !parseChoice(msg.body, p.slots, tz)) {
           store.setThread(msg.threadKey, { pendingProposal: null });
           thread.pendingProposal = null;
         }
+      }
+      if (thread.pendingBook && now() - new Date(thread.pendingBook.createdAt ?? 0) > PROPOSAL_TTL_MS) {
+        store.setThread(msg.threadKey, { pendingBook: null });
+        thread.pendingBook = null;
       }
       if (thread.pendingProposal) await proposalReply(msg, thread, say);
       else if (thread.pendingBook) await bookReply(msg, thread, say);
@@ -450,11 +465,12 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           history: thread.history ?? [],
         });
         store.setThread(msg.threadKey, { lastIntent: intent.intent });
-        await learnName(msg.from, intent.name ?? extractFields(msg.body).name);
+        const learnedName = intent.name ?? extractFields(msg.body).name;
+        await learnName(msg.from, learnedName);
         switch (intent.intent) {
           case "book": {
-            store.upsertCustomer(msg.from, intent.name ? { name: intent.name } : {});
-            crmSync(msg.from).catch(() => {});
+            store.upsertCustomer(msg.from, learnedName ? { name: learnedName } : {});
+            if (!learnedName) crmSync(msg.from).catch(() => {});
             const existing = store.jobForPhone(msg.from);
             const book = gatherBook(msg, intent, "book");
             if (!isContractor(msg.from) && existing && similarDesc(existing.description, book.description ?? msg.body)) {

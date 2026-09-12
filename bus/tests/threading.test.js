@@ -5,12 +5,12 @@ const { stubCalendar } = require("../calendar.js");
 
 const CONTRACTOR = "+15550001111";
 
-async function serve({ classify, notify: notifyOverride, seed } = {}) {
+async function serve({ classify, notify: notifyOverride, seed, env = {} } = {}) {
   const sent = [];
   let notifyCalls = 0;
   const calendar = stubCalendar("UTC");
   const { server, store } = createBusServer(
-    { CONTRACT_PHONE: CONTRACTOR, CONTRACTOR_TZ: "UTC", SEND_RETRY_MS: "5" },
+    { CONTRACT_PHONE: CONTRACTOR, CONTRACTOR_TZ: "UTC", SEND_RETRY_MS: "5", ...env },
     {
       ai: { classify },
       calendar,
@@ -138,6 +138,64 @@ test("a turn that dies entirely does not jam the queue for the next text", async
     await until(() => sent.some((s) => /couldn't reach/.test(s.body)), "apology attempt");
     await inbound("q-2", "what's my day?");
     await until(() => sent.some((s) => /Nothing booked|booked/i.test(s.body)), "next turn reply");
+  } finally {
+    server.close();
+  }
+});
+
+test("a timed-out turn still gets a soft-ack text instead of silence", async () => {
+  const { server, sent, inbound, until } = await serve({
+    classify: () => new Promise(() => {}),
+    env: { TURN_TIMEOUT_MS: "80" },
+  });
+  try {
+    await inbound("to-1", "hang me");
+    await until(() => sent.some((s) => /recorded shortly/.test(s.body)), "soft-ack");
+  } finally {
+    server.close();
+  }
+});
+
+test("a slow turn sends the working beat first, then the real reply", async () => {
+  const { server, sent, inbound, until } = await serve({
+    classify: async () => {
+      await new Promise((r) => setTimeout(r, 150));
+      return { intent: "day_summary" };
+    },
+    env: { WORKING_BEAT_MS: "30" },
+  });
+  try {
+    await inbound("wb-1", "what's my day?");
+    await until(() => sent.length >= 2, "beat + reply");
+    assert.match(sent[0].body, /On it/);
+    assert.match(sent[1].body, /Nothing booked|booked/i);
+  } finally {
+    server.close();
+  }
+});
+
+test("a caller's name is learned into the customer record", async () => {
+  const { server, store, inbound, until } = await serve({
+    classify: async () => ({ intent: "day_summary" }),
+  });
+  try {
+    await inbound("nm-1", "this is Dana, what's my day?");
+    await until(() => Object.values(store.data.customers).some((c) => c.name === "Dana"), "name learned");
+  } finally {
+    server.close();
+  }
+});
+
+test("ack and goodbye texts get short replies", async () => {
+  const { server, sent, inbound, until } = await serve({
+    classify: async () => ({ intent: "other" }),
+  });
+  try {
+    await inbound("ak-1", "sounds good");
+    await inbound("ak-2", "that's all");
+    await until(() => sent.length >= 2, "two replies");
+    assert.match(sent[0].body, /Got it/);
+    assert.match(sent[1].body, /Talk soon/);
   } finally {
     server.close();
   }

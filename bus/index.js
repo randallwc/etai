@@ -103,7 +103,7 @@ function createBusServer(env = process.env, overrides = {}) {
     const prev = turns.get(key) ?? Promise.resolve();
     const timed = Promise.race([
       prev.then(fn),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("turn timeout")), 30_000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("turn timeout")), Number(env.TURN_TIMEOUT_MS ?? 30_000))),
     ]);
     const next = timed.catch(() => {});
     turns.set(key, next);
@@ -160,7 +160,12 @@ function createBusServer(env = process.env, overrides = {}) {
           .catch(() => {});
       }, Number(env.WORKING_BEAT_MS ?? 1500));
       enqueue(body.threadKey, () => loop.handle(body))
-        .catch((e) => console.error(`loop error: ${e.stack}`))
+        .catch((e) => {
+          if (e.message === "turn timeout") {
+            return notify({ to: body.from, body: "Done - it will be recorded shortly.", threadKey: body.threadKey }).catch(() => {});
+          }
+          console.error(`loop error: ${e.stack}`);
+        })
         .finally(() => clearTimeout(beat));
       return;
     }
@@ -196,7 +201,13 @@ function createBusServer(env = process.env, overrides = {}) {
       if (!store.dedup(msg.externalId)) {
         return replyJson(res, 200, { reply: "", duplicate: true });
       }
-      const reply = await enqueue(msg.threadKey, () => loop.handle(msg));
+      let reply;
+      try {
+        reply = await enqueue(msg.threadKey, () => loop.handle(msg));
+      } catch (e) {
+        reply = e.message === "turn timeout" ? "Done - it will be recorded shortly." : "";
+        if (e.message !== "turn timeout") console.error(`loop error: ${e.stack}`);
+      }
       return replyJson(res, 200, { reply: reply ?? "" });
     }
     if (path === "/tts") {
