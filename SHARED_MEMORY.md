@@ -45,8 +45,9 @@ CONVENTIONS
   - .githooks/pre-commit runs npm test on every commit
     (core.hooksPath=.githooks is set repo-wide).
   - Commits: one-line heading plus 2-3 sentences; keep them short.
-  - Never commit secrets. Ambiguous keys are ak_* in env or .secrets
-    (gitignored). *.swp and .secrets* are ignored.
+  - Never commit secrets. Keys live in repo-root .env (gitignored);
+    services load it via shared/env.js loadEnv() in their entry point.
+    Names in use: AMBIG_API, COPILOT_API, CONTRACT_PHONE, CLIENT_PHONE.
 
 VERIFIED AMBIGUOUS API (live-tested 2026-09-12, workspace etai-workspace)
 -------------------------------------------------------------------------
@@ -84,8 +85,11 @@ LANDMINES
   - iMessage needs a Mac running BlueBubbles; the only other real outbound
     path today is ambimail (Ambiguous mail.send -> number@vtext.com),
     wired into messaging/ transports -- Verizon-only, outbound-only, and
-    the gateway dies ~March 2027. Two live sends to 2066169257 went out
-    this way on 2026-09-12; delivery unconfirmed. Sim transport remains
+    the gateway dies ~March 2027. Live sends to 2066169257 and
+    4253625633 went out on 2026-09-12; confirmed in /api/mail/sent but
+    handset delivery unconfirmed (vtext gives no receipt). Replies would
+    land in the workspace mail inbox (/api/mail/inbox) -- unproven as an
+    inbound path, inbox was empty at test time. Sim transport remains
     for offline work.
   - `node --test <dir>` fails -- dirs are not discovered; use the glob.
   - Ambiguous events/bookings are member-centric: availability only exists

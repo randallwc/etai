@@ -123,6 +123,7 @@ function createMessagingServer(env = process.env) {
 }
 
 if (require.main === module) {
+  require("../shared/env.js").loadEnv();
   const port = Number(process.env.PORT ?? 4020);
   const { server } = createMessagingServer();
   server.listen(port, () => console.log(`messaging listening on :${port}`));
