@@ -60,11 +60,17 @@ function createMessagingServer(env = process.env) {
   }
 
   function reply(res, status, payload) {
-    res.writeHead(status, { "content-type": "application/json" });
-    res.end(JSON.stringify(payload ?? {}));
+    res.writeHead(status, {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-headers": "content-type",
+    });
+    res.end(status === 204 ? undefined : JSON.stringify(payload ?? {}));
   }
 
   async function handle(req, res) {
+    if (req.method === "OPTIONS") return reply(res, 204);
     const url = new URL(req.url, "http://localhost");
     const path = url.pathname;
     if (req.method === "GET" && path === "/healthz") {
