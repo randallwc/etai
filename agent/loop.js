@@ -269,8 +269,17 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, co
           case "cancel":
             await cancel(msg, say);
             break;
+          case "eta": {
+            const job = store.jobForPhone(msg.from);
+            if (job?.eta) await say(`Latest ETA ${fmtTime(job.eta, tz)} — see you soon.`);
+            else if (job) await say("The contractor will text you an ETA shortly.");
+            else await say("I don't see an active job for you right now.");
+            break;
+          }
           default:
-            if (isContractor(msg.from) && createTask) {
+            if (/^(ok|okay|thanks|thank you|thx|ty|got it|great|perfect|sounds good|yep|yeah|yup|cool|nice)\b/.test(msg.body.trim().toLowerCase())) {
+              await say("Got it, thanks!");
+            } else if (isContractor(msg.from) && createTask) {
               const task = await record("create_task", { title: msg.body }, () => createTask(msg.body));
               await say(`Logged as a task: "${task?.title ?? msg.body}".`);
             } else {
