@@ -53,9 +53,9 @@ export function offlineReply(text) {
   if (req.kind === "schedule") {
     const day = req.dayOffset === 0 ? "today" : req.dayOffset === 1 ? "tomorrow" : `in ${req.dayOffset} days`;
     const h12 = ((req.hour + 11) % 12) + 1;
-    return `Will do — checking Ambiguous. Done: meeting is scheduled${
+    return `Will do - checking Ambiguous. Done: meeting is scheduled${
       req.withName ? ` with ${req.withName}` : ""
     } for ${h12}${req.hour >= 12 ? "pm" : "am"} ${day}, based on availability. Is that all?`;
   }
-  return "Got it — I've logged that in Ambiguous as a task. Is that all?";
+  return "Got it - I've logged that in Ambiguous as a task. Is that all?";
 }

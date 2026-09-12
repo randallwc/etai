@@ -83,7 +83,7 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     userSay(text);
 
     if (lastAgentMsg?.text.includes("Is that all") && isDoneSignal(text)) {
-      agentSay("Perfect — passing everything to Ambiguous to confirm. Bye!");
+      agentSay("Perfect - passing everything to Ambiguous to confirm. Bye!");
       setTimeout(handleEnd, 1400);
       return;
     }
@@ -235,7 +235,7 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
             <div className="call-summary-head">
               {sendOk
                 ? `Conversation sent to ${agent.name} via Ambiguous`
-                : "Couldn't reach Ambiguous — transcript not sent"}
+                : "Couldn't reach Ambiguous - transcript not sent"}
             </div>
             {messages.length ? (
               messages.map((m, i) => (

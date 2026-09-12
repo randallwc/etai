@@ -6,11 +6,11 @@ const base = (process.env.AMBIGUOUS_BASE_URL ?? "https://app.ambiguous.ai").repl
 const TZ = "America/Los_Angeles";
 
 const JOBS = [
-  { day: 0, start: "15:00", mins: 60, title: "Sprinkler repair — Rivera", phone: "+15550100100" },
-  { day: 0, start: "16:00", mins: 90, title: "Water heater check — Chen", phone: "+15550100100" },
-  { day: 0, start: "17:30", mins: 60, title: "Fence gate fix — Okafor", phone: "+15550100100" },
-  { day: 1, start: "09:30", mins: 60, title: "Haul debris — Diaz", phone: "+15550100100" },
-  { day: 1, start: "13:00", mins: 90, title: "Irrigation tune-up — Park", phone: "+15550100100" },
+  { day: 0, start: "15:00", mins: 60, title: "Sprinkler repair - Rivera", phone: "+15550100100" },
+  { day: 0, start: "16:00", mins: 90, title: "Water heater check - Chen", phone: "+15550100100" },
+  { day: 0, start: "17:30", mins: 60, title: "Fence gate fix - Okafor", phone: "+15550100100" },
+  { day: 1, start: "09:30", mins: 60, title: "Haul debris - Diaz", phone: "+15550100100" },
+  { day: 1, start: "13:00", mins: 90, title: "Irrigation tune-up - Park", phone: "+15550100100" },
 ];
 
 function dateInTz(offsetDays) {

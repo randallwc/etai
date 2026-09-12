@@ -5,7 +5,7 @@ const RAIN_THRESHOLD = 50;
 
 /**
  * Run the pre-booking checklist for a candidate slot. Only checks whose
- * inputs were actually fetched are included — missing data is skipped, not
+ * inputs were actually fetched are included - missing data is skipped, not
  * failed. Returns SchedulingCheck[] (see models/scheduling-check.schema.json).
  */
 export function runChecks({
@@ -31,7 +31,7 @@ export function runChecks({
       detail: `${travelMinutes} min drive${prevEnd ? " from the last job" : ""}`,
       warn:
         gapMin < travelMinutes
-          ? `tight travel — only ${Math.round(gapMin)} min between jobs`
+          ? `tight travel - only ${Math.round(gapMin)} min between jobs`
           : `long drive (${travelMinutes} min)`,
     });
   }

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-async function loadModule(url) {
+async function loadModule(url, demo) {
   vi.resetModules();
   vi.stubEnv("VITE_MESSAGING_URL", url ?? "");
+  vi.stubEnv("VITE_DEMO_PHONE", demo ?? "");
   return import("./notify.js");
 }
 
@@ -20,7 +21,7 @@ describe("etaMessage", () => {
       etaText: "~10:42 AM",
     });
     expect(text).toBe(
-      "Hi Sam, Al's Lock & Key here — on my way, about 4.2 mi out, ETA ~10:42 AM."
+      "Hi Sam, Al's Lock & Key here - on my way, about 4.2 mi out, ETA ~10:42 AM."
     );
   });
 
@@ -35,6 +36,21 @@ describe("etaMessage", () => {
     });
     expect(text).toContain("Hi there,");
     expect(text).toContain("Al's Lock & Key");
+  });
+});
+
+describe("lateMessage", () => {
+  it("states the delay and the new ETA", async () => {
+    const m = await loadModule();
+    const text = m.lateMessage({
+      contractor: { name: "Al's Lock & Key" },
+      customer: { name: "Sam" },
+      minutes: 15,
+      etaText: "2:16 PM",
+    });
+    expect(text).toBe(
+      "Hi Sam, Al's Lock & Key here - running about 15 min late, new ETA 2:16 PM. Sorry for the delay."
+    );
   });
 });
 
@@ -70,6 +86,18 @@ describe("sendSms", () => {
         body: "hi",
         threadKey: "+15551234567",
       }),
+    });
+  });
+
+  it("reroutes every text to VITE_DEMO_PHONE when set", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const m = await loadModule("http://localhost:4020", "+15550100100");
+    await m.sendSms({ to: "+15551234567", body: "hi", threadKey: "+15551234567" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      to: "+15550100100",
+      body: "hi",
+      threadKey: "+15550100100",
     });
   });
 
