@@ -1,4 +1,5 @@
-const { existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { existsSync, readFileSync } = require("node:fs");
+const { writeFile } = require("node:fs/promises");
 const { randomUUID } = require("node:crypto");
 
 const SEEN_CAP = 5000;
@@ -18,8 +19,21 @@ function createStore(file = null) {
     ...(file && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {}),
   };
 
+  let writing = Promise.resolve();
+  let dirty = false;
   function save() {
-    if (file) writeFileSync(file, JSON.stringify(data, null, 1));
+    if (!file) return;
+    dirty = true;
+    writing = writing
+      .then(async () => {
+        if (!dirty) return;
+        dirty = false;
+        await writeFile(file, JSON.stringify(data, null, 1));
+      })
+      .catch((e) => console.error(`state save failed: ${e.message}`));
+  }
+  function flush() {
+    return writing;
   }
 
   function dedup(externalId) {
@@ -110,6 +124,7 @@ function createStore(file = null) {
   return {
     data,
     save,
+    flush,
     dedup,
     upsertCustomer,
     addJob,

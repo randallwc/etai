@@ -21,6 +21,13 @@ function createMessagingServer(env = process.env) {
   const undelivered = [];
   const retryMs = Number(env.FANOUT_RETRY_MS ?? 5000);
   const retryMax = Number(env.FANOUT_RETRY_MAX ?? 24);
+  const allowedFrom = new Set(
+    (env.ALLOWED_FROM ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(toE164),
+  );
 
   function record(message) {
     if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
@@ -52,6 +59,11 @@ function createMessagingServer(env = process.env) {
   const inflight = new Set();
   async function accept(message) {
     if (!message) return null;
+    if (allowedFrom.size && !allowedFrom.has(toE164(message.from))) {
+      if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
+      seen.add(message.externalId);
+      return { message, filtered: true };
+    }
     if (seen.has(message.externalId) || inflight.has(message.externalId))
       return { message, duplicate: true };
     const queued = undelivered.findIndex((u) => u.message.externalId === message.externalId);

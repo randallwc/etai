@@ -89,7 +89,7 @@ test("logAction appends tool, args, result or error, and createdAt", () => {
   assert.deepEqual(b.args, {});
 });
 
-test("a store reloaded from the same file sees prior mutations", () => {
+test("a store reloaded from the same file sees prior mutations", async () => {
   const dir = mkdtempSync(join(tmpdir(), "bus-state-"));
   try {
     const file = join(dir, "state.json");
@@ -99,6 +99,7 @@ test("a store reloaded from the same file sees prior mutations", () => {
     const j = s1.addJob({ customerId: c.id, status: "confirmed", window: win("2025-06-01T13:00:00Z", "2025-06-01T14:00:00Z") });
     s1.setThread("k", { pending: 1 });
     s1.logAction({ tool: "t", result: "r" });
+    await s1.flush();
     const s2 = createStore(file);
     assert.equal(s2.dedup("m1"), false);
     assert.equal(s2.data.customers["+1555"].ambiguousCrmId, "crm-9");

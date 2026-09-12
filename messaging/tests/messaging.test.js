@@ -418,3 +418,32 @@ test("ambimail send retries once on a 5xx or network blip", async () => {
     globalThis.fetch = orig;
   }
 });
+
+test("ALLOWED_FROM filters non-allowed senders before fanout", async () => {
+  const sinkReceived = [];
+  const sink = http.createServer((req, res) => {
+    req.on("data", () => {});
+    req.on("end", () => {
+      sinkReceived.push(true);
+      res.writeHead(202);
+      res.end("{}");
+    });
+  });
+  await new Promise((r) => sink.listen(0, r));
+  const app = createMessagingServer({ ALLOWED_FROM: "+15551112222" });
+  await new Promise((r) => app.server.listen(0, r));
+  const b = `http://127.0.0.1:${app.server.address().port}`;
+  try {
+    await post(`${b}/subscriptions`, { url: `http://127.0.0.1:${sink.address().port}/webhooks/inbound` });
+    const blocked = await post(`${b}/simulate/inbound`, { from: "+15559998888", body: "let me in" });
+    assert.equal(blocked.status, 202);
+    const allowed = await post(`${b}/simulate/inbound`, { from: "+15551112222", body: "hi" });
+    assert.equal(allowed.status, 202);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(sinkReceived.length, 1);
+  } finally {
+    app.server.close();
+    app.poller?.stop?.();
+    sink.close();
+  }
+});

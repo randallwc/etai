@@ -169,21 +169,43 @@ function createCalendar({ ambi, env = process.env, now = () => new Date() } = {}
     else pending.set(id, op);
   }
 
+  let pushing = false;
+  function pushSoon() {
+    if (pushing) return;
+    pushing = true;
+    setImmediate(async () => {
+      try {
+        let prev = -1;
+        while (pending.size && pending.size !== prev) {
+          prev = pending.size;
+          await push();
+        }
+      } catch (e) {
+        console.error(`calendar push: ${e.message}`);
+      } finally {
+        pushing = false;
+      }
+    });
+  }
+
   async function createEvent(body) {
     const ev = await mem.createEvent(body);
     pending.set(ev.id, "create");
+    pushSoon();
     return ev;
   }
 
   async function updateEvent(body) {
     const ev = await mem.updateEvent(body);
     enqueue(body.eventId, "update");
+    pushSoon();
     return ev;
   }
 
   async function cancelEvent(body) {
     const ev = await mem.cancelEvent(body);
     enqueue(body.eventId, "delete");
+    pushSoon();
     return ev;
   }
 
@@ -194,6 +216,7 @@ function createCalendar({ ambi, env = process.env, now = () => new Date() } = {}
       else if (op.op === "update") enqueue(op.eventId, "update");
       else if (op.op === "delete" || op.op === "cancel") enqueue(op.eventId, "delete");
     });
+    pushSoon();
     return results;
   }
 
