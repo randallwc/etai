@@ -51,6 +51,11 @@ GET /healthz -- { ok, transport, subscribers }.
 CONFIG
 ------
 
+The service loads the repo-root .env automatically on start via
+shared/env.js (never overrides vars already in the environment). Any
+component can do the same with require("../shared/env.js").loadEnv() in
+its entry point -- keep it out of library code so tests stay hermetic.
+
   PORT                  listen port (default 4020)
   UPSTREAM_URL          optional default inbound subscriber
   BLUEBUBBLES_URL       Cloudflare tunnel URL of the BlueBubbles server
