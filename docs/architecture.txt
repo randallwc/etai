@@ -1,0 +1,179 @@
+ETAI(7)                     ETAi Architecture                    ETAI(7)
+
+NAME
+       etai - appointment scheduling for contractors and clients
+       through messaging
+
+OVERVIEW
+       ETAi is a system where clients schedule, reschedule, and
+       cancel appointments with contractors entirely through
+       messages. There is no app for the client to learn. The
+       client texts, the system books.
+
+       The system has three services plus a UI:
+
+       1. msg   - the messaging service      (messaging/, built)
+       2. bus   - the central router         (bus/, to be built)
+       3. cal   - the calendar side          (calendar-agent/ + the
+                  Ambiguous workspace behind it)
+       4. ui    - the video calling platform (frontend/, built)
+
+PARTS
+
+   msg
+       The messaging service. Owns all inbound and outbound
+       channels: iMessage via BlueBubbles today, SMS and voice
+       later. Holds no scheduling logic.
+
+       Inbound: the provider POSTs to /webhooks/bluebubbles,
+       the message is normalized (channel, from, body,
+       externalId, receivedAt, threadKey), deduplicated on
+       externalId, and fanned out to every subscriber. The bus
+       subscribes either by setting UPSTREAM_URL on msg (which
+       auto-subscribes {UPSTREAM_URL}/webhooks/inbound) or by
+       POSTing its URL to /subscriptions.
+
+       Outbound: callers POST /send {to, body, threadKey}; msg
+       picks the transport (bluebubbles when its env vars are
+       set, else a stdout simulator). Contract in docs/PHONE.md,
+       run details in docs/messaging.md.
+
+   bus
+       The central router -- the "agent service" in
+       docs/INTERFACES.md and docs/API.md. Everything crosses
+       it; nothing talks point to point.
+
+       For now the bus is a plain forwarder. It exposes
+       POST /webhooks/inbound, which msg fans out to, and
+       forwards the normalized message to the calendar side.
+       Replies and notifications come back the other way: the
+       bus POSTs to msg's /send.
+
+       The same component will grow the agent loop described in
+       docs/API.md (find customer, check availability, book,
+       notify). Forwarding first, intelligence second -- the
+       cal AI already understands prose, so a dumb pipe is
+       genuinely useful on day one. Later the bus earns its
+       keep by summarizing, enriching with weather and travel
+       time, and fanning a message out to both msg and cal.
+
+   cal
+       The calendar side has two layers.
+
+       The contract: docs/CALENDAR.md defines five operations
+       (availability, list a day, create, update, cancel) the
+       bus can call over REST at CALENDAR_SERVICE_URL, or as an
+       in-process CalendarProvider module. Everything
+       Ambiguous-specific hides behind it.
+
+       The brain: Ambiguous AI's workspace is the system of
+       record (events, CRM, tasks, documents) and its Assistant
+       is the cal AI we lean on. calendar-agent/test.js shows
+       the pattern: POST /api/assistant/chat with a natural
+       language task, and the Assistant decides which calendar
+       tools to call. All natural-language interpretation and
+       scheduling decisions live on this side. The bus does not
+       parse intent; if a message needs understanding it goes
+       to cal.
+
+   ui
+       The video calling platform in frontend/. Today it talks
+       to the Ambiguous REST API directly from the browser:
+       scheduling requests become real calendar events
+       (resolve attendee, check free/busy, create event),
+       anything else becomes a task, and the finished call
+       transcript is stored as a workspace document. The
+       planned path is ui -> bus -> cal so the bus sees every
+       request, but that leg is not wired yet.
+
+MODELS
+       The wire contracts are JSON schemas in models/:
+       phone-contract (inbound message shape), calendar-contract
+       and calendar-event, assistant-chat-response,
+       call-transcript, ambiguous-user, persona, task. Per
+       AGENT.md, schemas land before the code that uses them.
+
+DATA FLOW
+       Inbound, as wired today:
+
+           client/contractor phone
+             -> BlueBubbles webhook -> msg
+             -> normalize -> dedup -> fanout
+             -> POST {UPSTREAM_URL}/webhooks/inbound   (bus)
+             -> cal AI                               (cal)
+
+       Outbound:
+
+           bus -> POST {PHONE_SERVICE_URL}/send -> msg
+             -> transport -> client/contractor phone
+
+       Video, as built today (bus bypassed):
+
+           ui -> Ambiguous REST -> events/tasks/documents
+
+       Video, as planned:
+
+           ui -> prose -> bus -> cal AI
+
+USERS
+       Contractors travel to job sites and own the schedule.
+       Clients text in to book, reschedule, or cancel.
+
+       Contractors get a daily summary in the channel of their
+       choice. Clients get notified when the contractor
+       arrives, runs late, cancels, or reschedules.
+
+GOTCHAS
+       All messages go through the bus. The one exception that
+       exists today is the ui, which holds an Ambiguous key in
+       the browser and calls it directly -- fine for a demo,
+       but the plan is ui -> bus -> cal so there is one place
+       to audit and enrich.
+
+       The bus is called the "agent service" everywhere else in
+       docs/. Same component, two names.
+
+       The Assistant chat endpoint is contested ground:
+       docs/calendar-agent.md and calendar-agent/test.js call
+       POST /api/assistant/chat, while
+       docs/ambiguous-integration.md reports that path missing
+       from the live OpenAPI catalog and composes primitives
+       instead. Verify against the workspace before building on
+       either -- the spec, not the docs, is the truth.
+
+       Scheduling intelligence lives in cal, not the bus. A bus
+       that parses intent becomes a second agent and the two
+       will disagree. Keep the bus dumb about meaning; smart
+       about routing and enrichment only.
+
+       Dedup is best-effort everywhere: msg dedups externalId
+       in memory (a restart re-accepts once), so the bus should
+       dedup too.
+
+TRIED APPROACHES
+       Smart bus from day one: rejected. Letting the bus parse
+       intent duplicates the cal AI and gives two sources of
+       scheduling truth. The plain forwarder keeps one agent in
+       charge while we learn what enrichment the bus needs.
+
+       Direct msg -> cal connection: rejected. It saves a hop
+       now but means notifications, video prose, and future
+       weather enrichment each need their own wiring. One
+       router, one place to change.
+
+       MCP and the Ambiguous CLI for the ui: rejected -- MCP is
+       a tool-calling transport, not something a browser should
+       hold a key for, and the CLI shells out per call. Plain
+       REST won. See docs/ambiguous-integration.md.
+
+SEE ALSO
+       docs/INTERFACES.md -- component ownership and env vars.
+       docs/API.md        -- the agent service's endpoints and
+                             tools.
+       docs/CALENDAR.md   -- the calendar contract.
+       docs/PHONE.md      -- the messaging contract.
+       docs/messaging.md  -- running the messaging service.
+       docs/GOAL.md       -- product framing and demo script.
+       README.md          -- MVP scope and stretch goals.
+
+ETAI(7)                     ETAi Architecture                    ETAI(7)
