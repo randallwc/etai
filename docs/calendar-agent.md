@@ -6,13 +6,15 @@ https://app.ambiguous.ai/mcp (Streamable HTTP transport, protocol version
 Other project assets can require main.js and call createEventFromText(text).
 The input is deliberately structured plain text:
 
-    Sprinkler repair | 2026-09-14T10:00:00-07:00 | 60m | Rosa Alvarez | +15551234567 | 412 Willow St | Replace leaking valve
+    Sprinkler repair | 2026-09-14T10:00:00-07:00 | 60m | Rosa Alvarez | rosa@example.com, +15551234567 | 412 Willow St | Replace leaking valve
 
 The title, offset-bearing ISO start time, duration, client name, client
-contact, location, and request are all required. Location is written to the
-event's native location field. Client information and the request are written
-to a labeled event description. It returns a result with status created,
-conflict, or invalid rather than creating an event on malformed input or when
+contact containing an email address, location, and request are all required.
+Location is written to the event's native location field. Client information
+and the request are written to a labeled event description. The client email
+is added as an event attendee and receives a direct MCP email confirmation.
+It returns a result with status created, conflict, invalid, or
+notification_failed rather than creating an event on malformed input or when
 the time overlaps an existing non-cancelled event. It reads the surrounding
 calendar window before creating and uses the default calendar (or the first
 available calendar). The event object returned by Ambiguous is included on
@@ -23,8 +25,16 @@ To move an existing event, call rescheduleEventFromText(text) with:
     event-id | 2026-09-14T13:00:00-07:00 | 60m
 
 It checks the surrounding calendar before the write, ignores the event being
-moved, and returns updated, conflict, or invalid. The caller must supply the
-Ambiguous event id returned when the event was created or listed.
+moved, preserves the event attendees, and sends every attendee with an email
+address a direct MCP change notice. It returns updated, conflict, invalid, or
+notification_failed. The caller must supply the Ambiguous event id returned
+when the event was created or listed. An event without an attendee email is
+not rescheduled, because the agent cannot notify its relevant party.
+
+When an event write succeeds but any direct email cannot be sent, the result
+is notification_failed and includes per-recipient delivery outcomes. The
+caller must retry or resolve that notification failure; the calendar write is
+not rolled back.
 
 Text is not sent to an LLM. Relative dates, vague times, attendee resolution,
 and automatic rescheduling are intentionally rejected until a caller turns
