@@ -95,7 +95,9 @@ draggable picture-in-picture tile.
 │   └── tests/
 ├── shared/                    zero-dep helpers shared across services
 │   └── env.js                 .env loader (no override of set vars)
-├── bus/                       reserved, empty
+├── bus/                       central router: /webhooks/inbound forwards
+│                              to calendar AI, /webhooks/calendar takes
+│                              notifications -> texts via messaging /send
 ├── user-interface/            reserved, empty (frontend/ is the real UI)
 └── frontend/                  React + Vite app (self-contained deployable)
     ├── index.html
