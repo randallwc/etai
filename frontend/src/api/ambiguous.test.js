@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 function mockFetch(routes) {
   return vi.fn(async (url, options = {}) => {
-    const path = url.replace("https://app.ambiguous.ai/api", "");
+    const path = url.replace("https://app.ambiguous.ai/api", "").replace(/^\/api/, "");
     for (const [key, responder] of Object.entries(routes)) {
       const [method, prefix] = key.split(" ");
       if (options.method === method || (method === "GET" && !options.method)) {
