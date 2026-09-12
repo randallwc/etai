@@ -19,6 +19,8 @@ where the work is already happening?
 
 1. No comments in code. Docstrings only on external, well-named
    functions.
+1. Never use em dashes. Use single hyphens when punctuation needs a dash.
+   Keep sentences plain English, short, and to the point.
 1. Always create a schema before writing code and commit it first,
    under `models/`.
 1. Keep documents in `./docs`, unix format, no tables. Prose summaries
