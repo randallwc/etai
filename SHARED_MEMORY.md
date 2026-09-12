@@ -23,9 +23,9 @@ LAYOUT AND OWNERSHIP
                      for real iMessage, /simulate/inbound to test without
                      a Mac. Contract: models/phone-contract.schema.json,
                      docs/messaging.md
-  agent/             (planned) the agent core -- consumes messaging inbound,
-                     intent -> Ambiguous -> reply via /send. Plan and build
-                     order: docs/messaging-plan.md
+  agent/             the agent core -- consumes messaging inbound +
+                     /voice/turn, intent via assistant/chat -> Ambiguous ->
+                     reply. Docs: docs/agent.md. Tests: agent/tests/
   models/            JSON Schemas only (*.schema.json), one per shape;
                      includes the agent data model (contractor, customer,
                      job, agent-action, message) for the agent core
@@ -73,10 +73,10 @@ VERIFIED AMBIGUOUS API (live-tested 2026-09-12, workspace etai-workspace)
 LANDMINES
 ---------
 
-  - assistant/chat status is disputed: docs/ambiguous-integration.md says
-    it was absent from the catalog, but it IS in today's live spec
-    (/api/openapi.json). If it errors at runtime, compose the verified
-    primitives (users + availability + events) like frontend/api does.
+  - assistant/chat RESOLVED: it is live and is the agent's intent
+    classifier (agent/ai.js). Returns {response:"..."} with JSON inside;
+    tolerant extraction in extractJson. Earlier "absent" reports were
+    stale.
   - Fresh workspaces are "provisional": provision-agent 403s until the
     human owner clicks the verification email. The signup agent works.
   - coworkers dispatch needs coworker_service_id, only present on
@@ -103,14 +103,15 @@ LANDMINES
 CURRENT GAPS
 ------------
 
-  - Agent core is the active workstream: nothing yet consumes messaging
-    inbound, decides intent, calls Ambiguous, and replies. The plan is
-    docs/messaging-plan.md; its data-model schemas are already committed
-    under models/. First code step: agent/ skeleton + POST
-    /webhooks/inbound intake.
+  - Real INBOUND transport is the gap: the agent core is built and
+    tested end to end against sim/stub, but no provider delivers
+    inbound texts yet (BlueBubbles needs a Mac; LoopMessage is
+    inbound-initiated; Twilio is the fallback).
+  - Voice calls: the seam is ready -- POST {agent}/voice/turn takes
+    {from, body} and returns {reply} to speak; the caller is not
+    texted, counterparties are. A Vapi tool-call or frontend JS maps
+    straight onto it. docs/agent.md has the contract.
   - bus/ is empty; user-interface/ is empty (frontend/ is the real UI).
-  - Voice calls not wired; Vapi preferred (mid-call tool calls), see
-    docs/PHONE.md.
 
 AGENT ARCHITECTURE
 ----------------
@@ -122,3 +123,11 @@ createEvent/updateEvent/cancelEvent + resolveDayRef/partsInTz helpers +
 in-memory stubCalendar when no key), reminders.js (pre-job heads-up
 texts). index.js createAgentServer(env, overrides) accepts injected
 ambi/calendar/ai/store/notify/loop for tests.
+
+Voice seam: loop.handle(msg) returns the reply text when
+msg.channel === "voice" instead of texting it to the caller; index.js
+exposes that as POST /voice/turn {from, body} -> {reply}. Counterparty
+notifications still go through notify() -> messaging /send.
+
+Make: every component has a Makefile (run/test); root Makefile
+delegates -- `make test` == `npm test`, `make run-agent` etc.

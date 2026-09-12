@@ -94,9 +94,10 @@ DECISIONS LOCKED WITH THE USER
 NEXT
 ----
 
-  - Agent core: consume messaging inbound, intent -> Ambiguous tools ->
-    reply via /send. Full plan and build order: docs/messaging-plan.md.
-    Data-model schemas for it are committed under models/ (contractor,
-    customer, job, agent-action, message).
+  - Agent core is LANDED and tested (docs/agent.md): inbound intake,
+    assistant/chat intents, four flows, notifications, reminders,
+    digest, /voice/turn. What remains is a real inbound transport.
   - If a Mac appears: BlueBubbles checklist in docs/messaging.md.
-  - Vapi for voice stretch: POST /webhooks/voice-toolcall spec in PHONE.md.
+  - Voice: point the call layer at POST {agent}/voice/turn
+    ({from, body} -> {reply} to speak) -- Vapi tool-call or frontend
+    JS both work. Do not build a second scheduling brain.
