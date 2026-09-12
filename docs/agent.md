@@ -19,9 +19,9 @@ MODULES
                 reply text. Exports parseChoice/fmtTime/fmtDay helpers.
   ai.js         Intent classification via Ambiguous assistant/chat --
                 asks for a JSON intent object (models/intent.schema.json)
-                and extracts it with a tolerant parser. Any failure or
-                unparseable response falls back to {intent:"other"}, so
-                the loop always gets a shape it can switch on.
+                and extracts it with a tolerant parser. A failed or
+                unparseable response falls back to keyword classification
+                (fallbackClassify), so the loop works without a key.
   calendar.js   The calendar framework: listDay, proposeSlots,
                 createEvent, updateEvent, cancelEvent, plus timezone
                 helpers (resolveDayRef, partsInTz, findSlots). With no
