@@ -36,9 +36,10 @@ providers to retry what can never succeed.
 WHAT CHANGED
 ------------
 
-One env var, FETCH_TIMEOUT_MS (default 8000), bounds every outbound
-fetch via AbortSignal.timeout. Tests set it to 80ms, which is also why
-it exists as config rather than a constant.
+One env var, FETCH_TIMEOUT_MS, bounds every outbound fetch via
+AbortSignal.timeout -- 8s for fanout and poll calls, 15s for transport
+sends, which ride slower upstream APIs. Tests set it to 80ms, which is
+also why it exists as config rather than a constant.
 
 pollOnce short-circuits when a poll is already running. The interval
 still fires on schedule; an overlapped tick just returns 0.

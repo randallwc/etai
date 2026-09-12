@@ -69,8 +69,8 @@ its entry point -- keep it out of library code so tests stay hermetic.
   MAIL_POLL_SECONDS     inbox poll interval (default 15; 0 disables)
   MAIL_POLL_LIMIT       inbox page size per poll (default 20)
   FETCH_TIMEOUT_MS      ceiling on every outbound fetch -- subscriber
-                        fanout, transport sends, mail poll calls
-                        (default 8000)
+                        fanout and mail poll calls default 8000,
+                        transport sends default 15000
   FANOUT_RETRY_MS       redelivery interval for the undelivered queue
                         (default 5000)
   FANOUT_RETRY_MAX      attempts before a queued message is dropped
