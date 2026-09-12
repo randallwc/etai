@@ -120,18 +120,17 @@ The body is the first non-quoted block of body_text: lines starting with
 ">", an "On ... wrote:" header, separator runs, or "Sent from my ..."
 terminate the reply. Consumed items are acked with
 PATCH /api/mail/{id} {read:true}, and dedup keys on externalId
-"mail-<email uuid>".
+"ambmail-<email uuid>" -- the same prefix the /webhooks/ambimail push
+path uses, so an email arriving through both collapses to one emit.
 
 Caveats. This only sees replies to ambimail texts (or anything else that
 reached a carrier gateway); a client texting a fresh number reaches
 nothing. Latency is up to one poll interval plus the carrier's
 email-to-SMS hop. Channel is "sms", not "imessage". The unread filter
 plus mark-read ack means a restart does not re-emit, but in-memory dedup
-still covers a mark-read failure. Polling is independent of the push
-path -- if Ambiguous mail events are also delivered to
-POST /webhooks/ambimail, both normalizers produce "mail-"/"ambmail-"
-externalIds and service-level dedup only collapses them when the ids
-match, so prefer one path per deployment.
+still covers a mark-read failure. Polling is independent of the
+/webhooks/ambimail push path; if both are live the shared dedup
+collapses an email that arrives twice.
 
 GOTCHAS
 -------
