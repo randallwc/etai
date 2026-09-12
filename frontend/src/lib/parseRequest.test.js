@@ -42,6 +42,24 @@ describe("parseRequest", () => {
     expect(parseRequest("lunch with Ana").hour).toBe(12);
     expect(parseRequest("meeting next week").dayOffset).toBe(7);
   });
+
+  it("extracts a location after 'at' or 'in'", () => {
+    const r = parseRequest("book an electrician at 123 Main St tomorrow at 3pm");
+    expect(r.location).toBe("123 Main St");
+    expect(r.hour).toBe(15);
+    expect(r.dayOffset).toBe(1);
+    expect(parseRequest("schedule a locksmith in Ballard tomorrow").location).toBe(
+      "Ballard"
+    );
+  });
+
+  it("doesn't mistake times, filler words, or names for locations", () => {
+    expect(parseRequest("call Sam at 3pm").location).toBeNull();
+    expect(parseRequest("meeting in the morning").location).toBeNull();
+    expect(parseRequest("meeting with Albin").location).toBeNull();
+    const r = parseRequest("meet at the office at 5pm");
+    expect(r.location).toBe("the office");
+  });
 });
 
 describe("offlineReply", () => {
