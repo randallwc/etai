@@ -111,3 +111,14 @@ CURRENT GAPS
   - bus/ is empty; user-interface/ is empty (frontend/ is the real UI).
   - Voice calls not wired; Vapi preferred (mid-call tool calls), see
     docs/PHONE.md.
+
+AGENT REFACTOR IN FLIGHT
+------------------------
+A rewrite of agent/ is in progress in the shared worktree (untracked:
+loop.js, ai.js, state.js, reminders.js; schemas committed at
+models/intent.schema.json + thread.schema.json). The new loop expects
+calendar.js to export resolveDayRef, partsInTz, and a calendar surface
+of listDay/proposeSlots/createEvent/updateEvent/cancelEvent -- the
+committed calendar.js does NOT have these yet (it has the older
+listEvents/availability surface used by the committed index.js).
+Whoever lands the refactor must update calendar.js + index.js together.
