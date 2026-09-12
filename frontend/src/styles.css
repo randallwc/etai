@@ -1,15 +1,26 @@
 :root {
-  --agent-color: #7c5cff;
+  --agent-color: #4f46e5;
+  --bg: #f1f2f8;
+  --surface: #ffffff;
+  --ink: #191933;
+  --ink-dim: rgba(25, 25, 51, 0.55);
+  --line: rgba(25, 25, 51, 0.12);
+  --accent: #4f46e5;
 }
 
 * {
   box-sizing: border-box;
 }
 
+button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
-  background: #000;
-  color: #fff;
+  background: var(--bg);
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
     sans-serif;
   overflow: hidden;
@@ -17,6 +28,7 @@ body {
 
 .app {
   height: 100vh;
+  height: 100dvh;
 }
 
 
@@ -24,6 +36,7 @@ body {
 .ft-call {
   position: relative;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -39,8 +52,8 @@ body {
   gap: 12px;
   background: radial-gradient(
     circle at 50% 45%,
-    color-mix(in srgb, var(--agent-color) 35%, #111) 0%,
-    #050505 75%
+    color-mix(in srgb, var(--agent-color) 14%, var(--bg)) 0%,
+    var(--bg) 75%
   );
 }
 
@@ -56,9 +69,9 @@ body {
   background: linear-gradient(
     150deg,
     var(--agent-color),
-    color-mix(in srgb, var(--agent-color) 45%, #000)
+    color-mix(in srgb, var(--agent-color) 55%, #000)
   );
-  box-shadow: 0 0 80px color-mix(in srgb, var(--agent-color) 50%, transparent);
+  box-shadow: 0 0 80px color-mix(in srgb, var(--agent-color) 35%, transparent);
 }
 
 .agent-surface.speaking .orb-core {
@@ -83,21 +96,40 @@ body {
 
 .agent-surface-label span {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--ink-dim);
+}
+
+.skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  max-width: 320px;
+}
+
+.skill-chip {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 999px;
+  color: var(--agent-color);
+  background: color-mix(in srgb, var(--agent-color) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--agent-color) 25%, transparent);
 }
 
 
 
 .pip {
   position: absolute;
-  right: 16px;
-  top: 72px;
-  width: 140px;
+  right: calc(16px + env(safe-area-inset-right));
+  top: calc(72px + env(safe-area-inset-top));
+  width: min(140px, 30vw);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(25, 25, 51, 0.18);
   cursor: grab;
   touch-action: none;
   z-index: 20;
@@ -119,8 +151,8 @@ body {
   height: 100%;
   display: grid;
   place-items: center;
-  background: #222;
-  color: rgba(255, 255, 255, 0.5);
+  background: #e7e8f0;
+  color: var(--ink-dim);
   font-size: 0.75rem;
 }
 
@@ -134,7 +166,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: calc(16px + env(safe-area-inset-top))
+    calc(20px + env(safe-area-inset-right)) 16px
+    calc(20px + env(safe-area-inset-left));
   z-index: 10;
 }
 
@@ -152,17 +186,18 @@ body {
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 .switch-dot.on {
   opacity: 1;
-  border-color: #fff;
+  border-color: rgba(25, 25, 51, 0.5);
 }
 
 .ft-status {
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+  color: var(--ink-dim);
 }
 
 
@@ -176,7 +211,9 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 20px 20px 28px;
+  padding: 20px calc(20px + env(safe-area-inset-right))
+    calc(28px + env(safe-area-inset-bottom))
+    calc(20px + env(safe-area-inset-left));
   z-index: 10;
 }
 
@@ -185,8 +222,10 @@ body {
   text-align: center;
   font-size: 0.95rem;
   line-height: 1.5;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(25, 25, 51, 0.08);
   padding: 10px 18px;
   border-radius: 14px;
 }
@@ -209,17 +248,17 @@ body {
 .choices button {
   padding: 9px 20px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
-  color: #fff;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
   font: inherit;
   font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .choices button:hover {
-  border-color: #fff;
+  border-color: rgba(25, 25, 51, 0.4);
 }
 
 .composer {
@@ -230,22 +269,22 @@ body {
   width: 100%;
   padding: 11px 18px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
-  color: #fff;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem;
   outline: none;
   text-align: center;
 }
 
 .composer input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--ink-dim);
 }
 
 .composer input:focus {
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
 .ft-controls {
@@ -257,17 +296,19 @@ body {
 .ctrl-btn {
   padding: 12px 30px;
   border-radius: 999px;
-  border: none;
+  border: 1px solid var(--line);
   font: inherit;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .ctrl-btn.end {
   background: #e03a3a;
+  border-color: transparent;
+  color: #fff;
 }
 
 .ctrl-btn:disabled {
@@ -277,6 +318,8 @@ body {
 
 .ctrl-btn.mic.on {
   background: var(--agent-color);
+  border-color: transparent;
+  color: #fff;
 }
 
 .call-summary {
@@ -286,8 +329,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(25, 25, 51, 0.08);
   padding: 14px 18px;
   border-radius: 14px;
 }
@@ -303,14 +347,14 @@ body {
 .summary-line {
   font-size: 0.85rem;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
 }
 
 .summary-who {
   display: block;
   font-size: 0.65rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--ink-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
