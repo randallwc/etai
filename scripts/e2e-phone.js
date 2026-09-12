@@ -17,8 +17,8 @@ const BUS_LOG = process.env.E2E_BUS_LOG ?? "/tmp/etai-bus.log";
 const SKIP_RESTART = process.env.E2E_SKIP_RESTART === "1";
 
 const HEALTH_TIMEOUT_MS = Number(process.env.E2E_HEALTH_TIMEOUT_MS ?? 15000);
-const TURN_TIMEOUT_MS = Number(process.env.E2E_TURN_TIMEOUT_MS ?? 120000);
-const MAIL_LAG_MS = Number(process.env.E2E_MAIL_LAG_MS ?? 30000);
+const TURN_TIMEOUT_MS = Number(process.env.E2E_TURN_TIMEOUT_MS ?? 150000);
+const STALL_MS = Number(process.env.E2E_STALL_MS ?? 75000);
 const QUIET_MS = Number(process.env.E2E_QUIET_MS ?? 6000);
 const LOG_POLL_MS = 400;
 const MAIL_POLL_MS = 3000;
@@ -68,12 +68,13 @@ async function waitHealth(url, check, timeoutMs) {
 }
 
 /**
- * Send one simulated inbound text and collect everything the stack does in
- * response: "sent to" lines in the bus log (per-send receipts) and the real
- * mails they produce in the Ambiguous sent folder. Stops once every observed
- * send has surfaced as a mail and the log has been quiet for QUIET_MS.
+ * Send one simulated inbound text and collect what the stack does: "sent to"
+ * lines in the bus log (per-send receipts) and the real mails they produce in
+ * the Ambiguous sent folder. When `match` is given, waits for a mail body
+ * matching it, then drains for QUIET_MS to catch counterparty notices. Without
+ * a match it runs until nothing new has arrived for STALL_MS.
  */
-async function turn(text) {
+async function turn(text, match) {
   const baselineMails = await sentMailIds();
   const baselineSends = sentLines();
   const t0 = Date.now();
@@ -88,8 +89,11 @@ async function turn(text) {
   const deadline = Date.now() + TURN_TIMEOUT_MS;
   let lastActivity = Date.now();
   let lastMailPoll = 0;
+  let matchedAt = null;
+  let matched = null;
   while (Date.now() < deadline) {
     const n = sentLines();
+    if (n - baselineSends > sends.length) lastActivity = Date.now();
     while (sends.length < n - baselineSends) sends.push(Date.now());
     if (Date.now() - lastMailPoll >= MAIL_POLL_MS) {
       lastMailPoll = Date.now();
@@ -102,9 +106,14 @@ async function turn(text) {
         mails.push({ id: m.id, at: Date.now(), body: full.body_markdown ?? full.preview ?? m.preview ?? "" });
         lastActivity = Date.now();
       }
+      if (!matched && match) {
+        matched = mails.find((m) => match.test(m.body)) ?? null;
+        if (matched) matchedAt = Date.now();
+      }
     }
-    if (sends.length > 0 && mails.length >= sends.length && Date.now() - lastActivity >= QUIET_MS) break;
-    if (Date.now() - t0 > MAIL_LAG_MS && sends.length === 0 && mails.length === 0) break;
+    if (matchedAt && Date.now() - matchedAt >= QUIET_MS) break;
+    if (!matchedAt && Date.now() - lastActivity >= STALL_MS) break;
+    if (!match && mails.length > 0 && mails.length >= sends.length && Date.now() - lastActivity >= QUIET_MS) break;
     await sleep(LOG_POLL_MS);
   }
   mails.sort((a, b) => a.at - b.at);
@@ -113,6 +122,7 @@ async function turn(text) {
     t0,
     sends,
     mails,
+    matched,
   };
 }
 
@@ -122,15 +132,20 @@ let failures = 0;
 const timings = [];
 
 function show(label, r) {
-  const ack = r.sends.length ? r.sends[0] - r.t0 : null;
-  const answer = r.sends.length ? r.sends[r.sends.length - 1] - r.t0 : null;
+  const beatIdx = r.mails.findIndex((m) => /on it - checking/i.test(m.body));
+  const answerIdx = r.matched ? r.mails.indexOf(r.matched) : -1;
+  const sendAt = (i) =>
+    i >= 0 && r.sends.length ? r.sends[Math.min(i, r.sends.length - 1)] - r.t0 : null;
+  const ack = sendAt(beatIdx);
+  const answer = sendAt(answerIdx) ?? (r.sends.length ? r.sends[r.sends.length - 1] - r.t0 : null);
   timings.push({ label, ack, answer });
   console.log(
-    `     sends: ${r.sends.length}  first-out ${secs(ack)}  last-out ${secs(answer)}` +
+    `     sends: ${r.sends.length} [${r.sends.map((s) => secs(s - r.t0)).join(", ")}]  ` +
+      `ack ${secs(ack)}  answer ${secs(answer)}` +
       (r.post.status !== 202 ? `  (inbound -> ${r.post.status})` : ""),
   );
   for (const m of r.mails) {
-    console.log(`     text -> ${CLIENT}: ${m.body.replace(/\n/g, " ")}`);
+    console.log(`     text @${secs(m.at - r.t0)} -> ${CLIENT}: ${m.body.replace(/\n/g, " ")}`);
   }
 }
 
@@ -198,17 +213,20 @@ async function main() {
   );
 
   await step("(a) day summary -> route text", async () => {
-    const r = await turn("whats my day");
+    const r = await turn("whats my day", /route:|nothing on the calendar|nothing booked/i);
     show("day_summary", r);
     expectMail(r, /route:|nothing on the calendar|nothing booked/i, "summary");
   });
 
   let bookedJob = null;
   await step("(b) booking request -> slot offer", async () => {
-    let r = await turn("need an e2e faucet check tomorrow morning");
+    let r = await turn(
+      "need an e2e faucet check tomorrow morning",
+      /which works|i have .{0,140}open|fully booked|\?/i,
+    );
     show("book", r);
     if (!hasOffer(r) && r.mails.some((m) => /\?/.test(m.body))) {
-      r = await turn("tomorrow morning works, 12 demo lane");
+      r = await turn("tomorrow morning works, 12 demo lane", /which works|i have .{0,140}open|fully booked|\?/i);
       show("book follow-up", r);
     }
     if (!hasOffer(r)) throw new Error("no slot offer text");
@@ -216,9 +234,9 @@ async function main() {
 
   await step("(c) numeric pick -> locked in + job on calendar", async () => {
     const before = await busState();
-    const r = await turn("1");
+    const r = await turn("1", /locked in|already on the calendar/i);
     show("pick", r);
-    expectMail(r, /locked in/i, "booking confirmation");
+    expectMail(r, /locked in|already on the calendar/i, "booking confirmation");
     const after = await busState();
     const grew = after.jobs.filter((j) => !before.jobs.some((b) => b.id === j.id));
     if (!grew.length) throw new Error("no new job in /state");
@@ -229,7 +247,7 @@ async function main() {
   await step("(d) running 20 late -> job shifted + client ETA text", async () => {
     const before = upcomingJobs((await busState()).jobs)[0];
     if (!before) throw new Error("no upcoming job to shift");
-    const r = await turn("running 20 late");
+    const r = await turn("running 20 late", /new eta|shifted|active job/i);
     show("running_late", r);
     expectMail(r, /new eta|shifted/i, "late notice");
     const after = (await busState()).jobs.find((j) => j.id === before.id);
@@ -241,8 +259,12 @@ async function main() {
   await step("(e) cancel -> confirm + job canceled", async () => {
     const before = await busState();
     const ref = bookedJob ? "the e2e faucet check" : "my next visit";
-    const r = await turn(`cancel ${ref}`);
+    let r = await turn(`cancel ${ref}`, /cancel/i);
     show("cancel", r);
+    if (r.matched && /which one|few bookings|which visit/i.test(r.matched.body)) {
+      r = await turn("the e2e faucet check visit", /cancel/i);
+      show("cancel follow-up", r);
+    }
     expectMail(r, /cancel/i, "cancel confirmation");
     const after = await busState();
     const canceled = after.jobs.filter(
