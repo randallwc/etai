@@ -128,6 +128,35 @@ describe("fetchDaySummary", () => {
 });
 
 describe("handleRequest", () => {
+  it("speaks the assistant reply for non-scheduling requests", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "POST /assistant/chat": (path, body) => {
+          const { message } = JSON.parse(body);
+          return { response: `Assistant handled: ${message}` };
+        },
+      })
+    );
+    const m = await loadModule("ak_test");
+    expect(await m.handleRequest("what's on the docket?")).toBe(
+      "Assistant handled: what's on the docket?"
+    );
+  });
+
+  it("falls back to a task when the assistant has no reply", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "POST /assistant/chat": () => ({ status: "success" }),
+        "POST /tasks": () => ({ task: { title: "buy milk", status: "todo" } }),
+      })
+    );
+    const m = await loadModule("ak_test");
+    const reply = await m.handleRequest("buy milk");
+    expect(reply).toContain("buy milk");
+  });
+
   it("creates a task for non-scheduling requests", async () => {
     vi.stubGlobal(
       "fetch",

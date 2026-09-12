@@ -192,13 +192,22 @@ async function scheduleMeeting(req) {
 /**
  * Handle one live request from the call: scheduling requests book a real
  * calendar event (resolving the attendee in /users and checking free/busy),
- * anything else becomes a task. Returns the text the agent should speak,
- * or null when no API key is configured (caller uses offlineReply).
+ * anything else goes to the Ambiguous Assistant, which answers with its own
+ * workspace tools. Falls back to creating a task when the Assistant is
+ * unreachable. Returns the text the agent should speak, or null when no
+ * API key is configured (caller uses offlineReply).
  */
 export async function handleRequest(text) {
   if (!ambiguousEnabled) return null;
   const req = parseRequest(text);
   if (req.kind === "schedule") return scheduleMeeting(req);
+  const reply = await api("/assistant/chat", {
+    method: "POST",
+    body: JSON.stringify({ message: text, context: { audience: "agent" } }),
+  })
+    .then((r) => r.response)
+    .catch(() => null);
+  if (reply) return reply;
   const task = await createTask(text);
   return `Done — task "${task?.title ?? text}" is in Ambiguous. Is that all?`;
 }
