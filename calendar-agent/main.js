@@ -102,9 +102,10 @@ function formatSummary(calendars, events, from, to) {
 
 function parseEventText(text) {
   if (typeof text !== "string") throw new Error("Event text must be a string.");
-  const [title, startText, durationText, ...descriptionParts] = text.split("|").map((part) => part.trim());
-  if (!title || !startText || !durationText) {
-    throw new Error("Use: title | 2026-09-14T10:00:00-07:00 | 60m | optional description");
+  const [title, startText, durationText, clientName, clientContact, location, ...requestParts] = text.split("|").map((part) => part.trim());
+  const request = requestParts.join(" | ");
+  if (!title || !startText || !durationText || !clientName || !clientContact || !location || !request) {
+    throw new Error("Use: title | 2026-09-14T10:00:00-07:00 | 60m | client name | client contact | location | request");
   }
   if (!/(Z|[+-]\d{2}:\d{2})$/i.test(startText)) {
     throw new Error("Start time must include an ISO 8601 timezone offset.");
@@ -119,7 +120,8 @@ function parseEventText(text) {
     title,
     start_at: start.toISOString(),
     end_at: end.toISOString(),
-    ...(descriptionParts.join(" | ") ? { description: descriptionParts.join(" | ") } : {})
+    location,
+    description: `Client: ${clientName}\nContact: ${clientContact}\nRequest: ${request}`
   };
 }
 
