@@ -1,58 +1,120 @@
 const { randomUUID } = require("node:crypto");
+const { readFileSync, writeFileSync, existsSync } = require("node:fs");
+const { join } = require("node:path");
 
-const seen = new Set();
-const customers = new Map();
-const jobs = new Map();
-const pendingByThread = new Map();
+const DEFAULT_FILE = join(__dirname, ".state.json");
+const SEEN_CAP = 5000;
+const ACTION_CAP = 500;
+
+function empty() {
+  return { customers: {}, jobs: {}, pending: {}, actions: [], seen: [] };
+}
+
+let file = DEFAULT_FILE;
+let state = empty();
+if (existsSync(file)) {
+  try {
+    state = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    state = empty();
+  }
+}
+
+function useFile(path) {
+  file = path || null;
+  state = empty();
+  if (file && existsSync(file)) {
+    try {
+      state = JSON.parse(readFileSync(file, "utf8"));
+    } catch {
+      state = empty();
+    }
+  }
+}
+
+function persist() {
+  if (file) writeFileSync(file, JSON.stringify(state));
+}
 
 function dedup(externalId) {
-  if (seen.has(externalId)) return false;
-  if (seen.size >= 5000) seen.delete(seen.values().next().value);
-  seen.add(externalId);
+  if (state.seen.includes(externalId)) return false;
+  state.seen.push(externalId);
+  if (state.seen.length > SEEN_CAP) state.seen.shift();
+  persist();
   return true;
 }
 
 function customerByPhone(phone) {
-  if (!customers.has(phone)) {
-    customers.set(phone, {
+  if (!state.customers[phone]) {
+    state.customers[phone] = {
       id: randomUUID(),
       phone,
       name: null,
       address: null,
-    });
+    };
+    persist();
   }
-  return customers.get(phone);
+  return state.customers[phone];
 }
 
 function addJob(job) {
   const id = job.id ?? randomUUID();
-  const record = { ...job, id };
-  jobs.set(id, record);
-  return record;
+  state.jobs[id] = { ...job, id };
+  persist();
+  return state.jobs[id];
 }
 
-function jobsForCustomer(customerId) {
-  return [...jobs.values()].filter((j) => j.customerId === customerId);
+function jobByEventId(ambiguousEventId) {
+  return Object.values(state.jobs).find(
+    (j) => j.ambiguousEventId === ambiguousEventId,
+  );
+}
+
+function customerById(id) {
+  return Object.values(state.customers).find((c) => c.id === id);
 }
 
 function pending(threadKey) {
-  return pendingByThread.get(threadKey);
+  return state.pending[threadKey];
 }
 
-function setPending(threadKey, pendingValue) {
-  pendingByThread.set(threadKey, pendingValue);
+function setPending(threadKey, value) {
+  state.pending[threadKey] = value;
+  persist();
 }
 
 function clearPending(threadKey) {
-  pendingByThread.delete(threadKey);
+  delete state.pending[threadKey];
+  persist();
+}
+
+function logAction(tool, args, result, error) {
+  state.actions.push({
+    id: randomUUID(),
+    tool,
+    args,
+    ...(error ? { error: String(error) } : { result }),
+    createdAt: new Date().toISOString(),
+  });
+  if (state.actions.length > ACTION_CAP) state.actions.shift();
+  persist();
+}
+
+function _reset() {
+  state = empty();
+  persist();
 }
 
 module.exports = {
   dedup,
   customerByPhone,
+  customerById,
   addJob,
-  jobsForCustomer,
+  jobByEventId,
   pending,
   setPending,
   clearPending,
+  logAction,
+  useFile,
+  _reset,
 };
