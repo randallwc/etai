@@ -137,6 +137,18 @@ WORK ITEMS, IN ORDER
    normalized contract does not change. Only build the one the venue's
    hardware actually needs.
 
+6b. Proactive client schedule push (planned).
+
+   Inbound reschedule works -- a client can text "move it" and get open
+   slots. Missing: an outbound trigger that texts a client their current
+   booking plus the reschedule offer without them asking. Shape: POST
+   /internal/client-update {phone?} -> for each confirmed future job
+   (or the given client's), text "You have <job> <day> at <time>. Reply
+   with a new day/time to move it." Reuses store job records + fmtDay/
+   fmtTime; the reply re-enters through the existing reschedule intent,
+   so no new state machine. Scheduling cadence (e.g. day-before auto
+   send) is a reminder-tick extension once the trigger exists.
+
 7. Voice (shipped as a seam).
 
    POST /voice/turn is the synchronous endpoint the voice layer calls:
