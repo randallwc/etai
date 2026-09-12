@@ -27,10 +27,16 @@ Done and tested:
   - Data-model schemas for the agent core now committed under models/
     (contractor, customer, job, agent-action, message) -- schema-first
     per AGENT.md before any agent code lands.
+  - agent/ service LANDED 2026-09-12: inbound intake, per-thread state,
+    assistant/chat intent classification, the four flows, counterparty
+    notifications, reminders tick, digest, and the /voice/turn seam.
+    See docs/agent.md for what shipped; the items below stay as the
+    record of why it is shaped the way it is.
 
-The gap, verbatim from SHARED_MEMORY: no agent core. Nothing consumes
-inbound, decides intent, calls Ambiguous, and replies. That loop is the
-entire product -- everything below builds it.
+The remaining gap: real INBOUND transport. Everything between "a text
+arrives" and "a reply goes out" is built; what is missing is a provider
+that can actually deliver inbound texts (BlueBubbles on a Mac, or
+LoopMessage/Twilio). Voice calls ride the same loop via /voice/turn.
 
 THE SHAPE OF THE THING
 ----------------------
@@ -131,11 +137,13 @@ WORK ITEMS, IN ORDER
    normalized contract does not change. Only build the one the venue's
    hardware actually needs.
 
-7. Voice (stretch).
+7. Voice (shipped as a seam).
 
-   POST /webhooks/voice-toolcall answers Vapi tool-calls synchronously
-   (~7.5s window) against the same tools. Spec in docs/PHONE.md. Only
-   after flows 1-5 demo clean.
+   POST /voice/turn is the synchronous endpoint the voice layer calls:
+   in {from, body}, out {reply} to speak. The caller's reply is spoken,
+   not texted; counterparty notifications still go out over messaging.
+   A Vapi tool-call or the frontend JS both map onto it. Contract in
+   docs/agent.md.
 
 DECISIONS AND WHY
 -----------------
@@ -145,9 +153,13 @@ INTERFACES.md ideal; at hackathon scale it is a hop with no second
 implementer. If a calendar service ever lands, agent/ambiguous.js is
 the only file that changes.
 
-Deterministic intents before LLM. Demo reliability, zero extra keys,
-and the intents are genuinely few. The LLM stays as the unclassified-
-message fallback, not the primary path.
+Deterministic intents before LLM -- revised in place. The shipped
+classifier is Ambiguous assistant/chat asked for a JSON intent (agent/
+ai.js); it always returns a valid shape because failures fall back to
+{intent:"other"}. The regex layer turned out unnecessary once
+assistant/chat proved live and fast, and one path is simpler than two.
+If assistant/chat ever degrades, a deterministic pre-pass can be added
+in ai.js without touching the loop.
 
 JSON file state, not a database. One contractor, a handful of jobs,
 four hours. The file exists so restarts do not wipe a pending booking.
@@ -155,20 +167,22 @@ four hours. The file exists so restarts do not wipe a pending booking.
 Dedup on both sides. messaging/ dedups before fanout; the agent dedups
 again on receipt. In-memory dedup loses to a restart; providers retry.
 
-One slot, not a list. Clients answer "yes" to a concrete time; menus of
-windows read like software, and the product premise is that the client
-never knows.
+One slot, not a list -- revised in place. The shipped flow offers up to
+three open times and accepts "1", "second", or "9am works" as the pick.
+A single proposed slot forced a re-ask on every conflict; three options
+book in one round-trip and still read like a person texting.
 
-ENV REGISTRY (agent service)
-----------------------------
+ENV REGISTRY (agent service, as shipped)
+----------------------------------------
 
-  PORT, AGENT_BASE_URL          where it listens / its public URL
-  MESSAGING_URL                 the messaging service (== PHONE_SERVICE_URL)
-  AMBIGUOUS_API_KEY             ak_ key for etai-workspace
-  CONTRACTOR_USER_ID            workspace member id for availability
-  CONTRACTOR_PHONE              E.164; identifies "the boss" texts
-  OPENAI_API_KEY/ANTHROPIC_API_KEY   fallback intent path only
-  STATE_FILE                    JSON persistence path
+  PORT                  where it listens (default 4030)
+  PUBLIC_URL            its reachable URL, used for the subscription
+  MESSAGING_URL         the messaging service (== PHONE_SERVICE_URL)
+  AMBIG_API             ak_ key for etai-workspace (unset -> stub)
+  CONTRACT_PHONE        E.164; identifies "the boss" texts
+  CONTRACTOR_TZ         IANA timezone for slot math
+  STATE_FILE            JSON persistence path
+  REMINDER_LEAD_MINUTES heads-up window for reminders.js
 
 VERIFYING
 ---------
@@ -189,11 +203,9 @@ still has to pass for anyone editing it.
 OPEN QUESTIONS
 --------------
 
-  - Whether Ambiguous assistant/chat can be the brain outright (it is in
-    the live OpenAPI spec per SHARED_MEMORY; the frontend team found it
-    absent earlier and composed primitives instead). Verify live before
-    relying on it -- calendar-agent/test.js is the harness. Even if it
-    works, notify() and thread state stay ours.
+  - RESOLVED: assistant/chat is live and is the intent classifier
+    (agent/ai.js). It answers wrapped JSON reliably; failures fall back
+    to {intent:"other"}. notify() and thread state stayed ours.
   - Whether the commit hook should also run the frontend suite -- it
     currently does not (core.hooksPath=.githooks runs only root
     npm test; scripts/pre-commit.sh was never installed into .git/hooks
