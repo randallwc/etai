@@ -89,12 +89,12 @@ Not yet:
   - Real speech-to-text / text-to-speech
   - Animated agent video (visual interpolation)
   - Auth + per-user agent persistence
-  - Routing through the bus instead of calling Ambiguous directly
-    (see docs/architecture.txt)
+  - Routing through the scheduling agent instead of calling Ambiguous directly
+    (see docs/architecture.md)
 
 SEE ALSO
 --------
 
 docs/ambiguous-integration.md -- verified endpoint shapes and gotchas.
 AGENTS.md                     -- component map and sub-agent roles.
-docs/architecture.txt         -- where the ui sits in the system.
+docs/architecture.md          -- where the ui sits in the system.
