@@ -8,6 +8,7 @@ const { createStore } = require("./state.js");
 const { createLoop } = require("./loop.js");
 const { createJobPacket } = require("./packet.js");
 const { createTts } = require("./tts.js");
+const { createCopilot } = require("./copilot.js");
 const { startReminders } = require("./reminders.js");
 
 const REQUIRED_INBOUND = ["channel", "from", "body", "externalId", "receivedAt", "threadKey"];
@@ -55,6 +56,10 @@ function createBusServer(env = process.env, overrides = {}) {
     overrides.loop ??
     createLoop({ calendar, ai, store, notify, createTask: (t) => ambi.createTask(t), upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null, createPacket: ambi.enabled ? (a) => createJobPacket({ ambi, ...a }) : null, contractorPhone, tz });
 
+  const copilot =
+    overrides.copilot ??
+    createCopilot({ env, calendar, store, notify, chat: ambi.enabled ? (m) => ambi.assistantChat(m) : null, createTask: (t) => ambi.createTask(t), upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null, contractorPhone, tz });
+
   function fmtWhen(iso) {
     if (!iso) return "soon";
     return new Date(iso).toLocaleTimeString("en-US", {
@@ -100,12 +105,17 @@ function createBusServer(env = process.env, overrides = {}) {
   }
 
   const turns = new Map();
-  function enqueue(key, fn) {
+  function enqueue(key, fn, ms = Number(env.TURN_TIMEOUT_MS ?? 30_000)) {
     const prev = turns.get(key) ?? Promise.resolve();
+    let timer;
     const timed = Promise.race([
       prev.then(fn),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("turn timeout")), Number(env.TURN_TIMEOUT_MS ?? 30_000))),
+      new Promise((_, rej) => {
+        timer = setTimeout(() => rej(new Error("turn timeout")), ms);
+        timer.unref?.();
+      }),
     ]);
+    timed.finally(() => clearTimeout(timer)).catch(() => {});
     const next = timed.catch(() => {});
     turns.set(key, next);
     next.finally(() => {
@@ -132,6 +142,7 @@ function createBusServer(env = process.env, overrides = {}) {
         ambiguous: ambi.enabled,
         messaging: Boolean(messagingUrl),
         tts: Boolean(tts),
+        copilot: Boolean(copilot?.enabled),
       });
     }
     if (req.method === "GET" && path === "/state") {
@@ -156,16 +167,21 @@ function createBusServer(env = process.env, overrides = {}) {
         return replyJson(res, 202, { accepted: false, duplicate: true });
       }
       replyJson(res, 202, { accepted: true });
+      const handler = copilot?.handles(body.channel) ? copilot : loop;
       const beat = setTimeout(() => {
         notify({ to: body.from, body: "On it - checking the schedule now.", threadKey: body.threadKey })
           .catch(() => {});
       }, Number(env.WORKING_BEAT_MS ?? 1500));
-      enqueue(body.threadKey, () => loop.handle(body))
+      enqueue(
+        body.threadKey,
+        () => handler.handle(body),
+        handler === copilot ? Number(env.COPILOT_RUN_TIMEOUT_MS ?? 90000) + 5000 : undefined
+      )
         .catch((e) => {
           if (e.message === "turn timeout") {
             return notify({ to: body.from, body: "Done - it will be recorded shortly.", threadKey: body.threadKey }).catch(() => {});
           }
-          console.error(`loop error: ${e.stack}`);
+          console.error(`inbound handler error: ${e.stack}`);
         })
         .finally(() => clearTimeout(beat));
       return;
