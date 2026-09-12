@@ -20,6 +20,22 @@ export async function driveMinutes(from, to) {
   return seconds == null ? null : Math.round(seconds / 60);
 }
 
+export async function route(from, to) {
+  try {
+    const j = await fetchJson(
+      `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`
+    );
+    const r = j.routes?.[0];
+    if (!r) return null;
+    return {
+      meters: Math.round(r.distance),
+      minutes: Math.round(r.duration / 60),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function precipAt(lat, lon, when) {
   const date = when.toISOString().slice(0, 10);
   const j = await fetchJson(
