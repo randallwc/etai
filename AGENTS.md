@@ -93,7 +93,7 @@ draggable picture-in-picture tile.
 
 ```
 /
-├── docs/README.md             project readme (GitHub renders docs/)
+├── README.md
 ├── AGENTS.md                  this file
 ├── docs/SHARED_MEMORY.md      live state + landmines for all agents
 ├── LICENSE
