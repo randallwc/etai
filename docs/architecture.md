@@ -193,4 +193,4 @@ A direct messaging-to-calendar connection was rejected because stateful booking 
 
 ## Related documents
 
-See `docs/INTERFACES.md` for component ownership and environment variables, `docs/API.md` for bus endpoints and tools, `docs/CALENDAR.md` for the calendar contract, `docs/PHONE.md` for the messaging contract, `docs/GOAL.md` for product framing, and `README.md` for MVP scope.
+See `AGENTS.md` section 5 for component ownership, `docs/API.md` for bus endpoints and tools, `docs/CALENDAR.md` for the calendar contract, `docs/PHONE.md` for the messaging contract, and `README.md` for MVP scope.

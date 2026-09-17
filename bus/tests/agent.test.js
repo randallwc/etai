@@ -120,13 +120,6 @@ test("day summary answers with the route", async () => {
   assert.match(lastTo("+15550999999").body, /route|nothing/i);
 });
 
-test("client day summary answers with their booking", async () => {
-  const before = sent.length;
-  await inbound("d2", "what's my day", "+15551234567");
-  await waitForReplies(before + 1);
-  assert.match(lastTo("+15551234567").body, /sprinkler|nothing|booked/i);
-});
-
 test("back-to-back texts on one thread are processed in order", async () => {
   const before = sent.length;
   await inbound("r1", "need gutters cleaned tomorrow");

@@ -140,9 +140,8 @@ LANDMINES
     for workspace members (the contractor), not external clients.
   - core.hooksPath=.githooks bypasses .git/hooks entirely. The hook runs
     only root `npm test` (node:test glob) -- frontend vitest does NOT run
-    on commit despite scripts/pre-commit.sh existing. That script was
-    never installed here and would be bypassed anyway. Run
-    `npm --prefix frontend test` yourself before committing frontend work.
+    on commit. Run `npm --prefix frontend test` yourself before
+    committing frontend work.
 
 CURRENT GAPS
 ------------
@@ -156,7 +155,6 @@ CURRENT GAPS
     {from, body} and returns {reply} to speak; the caller is not
     texted, counterparties are. A Vapi tool-call or frontend JS maps
     straight onto it. docs/bus.md has the contract.
-  - user-interface/ is empty (frontend/ is the real UI).
 
 AGENT ARCHITECTURE
 ----------------
@@ -205,9 +203,6 @@ HANDOFFS
     from the board payload shape returns an ambimail externalId and the
     "etAI update: " prefix is applied server-side.
 
-  - docs/demo-day.md (Agent D owns it): still describes
-    CARRIER_GATEWAYS (env table ~line 40, silent-drop note ~line 153).
-    That mechanism is deleted -- GATEWAY_MAP won because one entry can
-    blast several domains. The same pins now read
-    GATEWAY_MAP=5550100100:vtext.com,5550100101:txt.att.net and
-    CARRIER_GATEWAY stays the fallback for unlisted numbers.
+  - Carrier routing is GATEWAY_MAP only; CARRIER_GATEWAYS is deleted.
+    The pins read GATEWAY_MAP=5550100100:vtext.com,5550100101:txt.att.net
+    and CARRIER_GATEWAY stays the fallback for unlisted numbers.

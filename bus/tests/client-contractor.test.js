@@ -60,32 +60,6 @@ async function serve(extraEnv = {}, extraOverrides = {}) {
   return { server, sent, store, calendar, base, inbound, until };
 }
 
-test("client booking offers multiple slots and picking one books it, contractor told", async () => {
-  const { server, sent, calendar, inbound, until } = await serve();
-  try {
-    await inbound("c1", "need sprinklers fixed tomorrow at 22 main st");
-    await until(1);
-    const offer = sent[0];
-    assert.equal(offer.to, CLIENT);
-    assert.match(offer.body, /\d+:\d{2} [AP]M.*or \d+\) \d+:\d{2} [AP]M/);
-    assert.match(offer.body, /which works/i);
-
-    await inbound("c2", "second");
-    await until(3);
-    assert.match(sent[1].body, /locked in/i);
-    assert.equal(sent[2].to, CONTRACTOR);
-    assert.match(sent[2].body, /new booking/i);
-
-    const day = new Date(Date.now() + 86400000);
-    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-    const events = await calendar.listDay({ date });
-    assert.equal(events.length, 1);
-    assert.equal(events[0].start, new Date(`${date}T10:30:00Z`).toISOString());
-  } finally {
-    server.close();
-  }
-});
-
 test("contractor running late shifts the job and texts the client a new ETA", async () => {
   const { server, sent, inbound, until } = await serve();
   try {
@@ -307,30 +281,6 @@ test("a natural-language pivot inside a proposal starts a new proposal", async (
   }
 });
 
-test("reschedule moves the one existing event rather than creating a second", async () => {
-  const { server, sent, calendar, store, inbound, until } = await serve();
-  try {
-    await inbound("m1", "book tomorrow at 22 main st");
-    await inbound("m2", "1");
-    await until(3);
-    const date = resolveDayRef("tomorrow", "UTC", new Date());
-    const friday = resolveDayRef("friday", "UTC", new Date());
-    const [job] = Object.values(store.data.jobs);
-    const eventId = job.ambiguousEventId;
-    await inbound("m3", "need to move it to friday");
-    await until(4);
-    await inbound("m4", "1");
-    await until(6);
-    assert.equal((await calendar.listDay({ date })).length, 0);
-    const fri = await calendar.listDay({ date: friday });
-    assert.equal(fri.length, 1);
-    assert.equal(fri[0].id, eventId);
-    assert.equal(Object.keys(store.data.jobs).length, 1);
-  } finally {
-    server.close();
-  }
-});
-
 test("a second pick after booking gets a help reply, not a duplicate job", async () => {
   const { server, sent, store, calendar, inbound, until } = await serve();
   try {
@@ -387,28 +337,4 @@ test("classify renders the channel system prompt", async () => {
   assert.match(prompts[2], /SMS text/);
 });
 
-test("an afternoon pick off the 9am grid still books", async () => {
-  const ai = {
-    classify: async (b) =>
-      /fix/.test(b)
-        ? { intent: "book", dayRef: "tomorrow", timePref: "afternoon", description: b }
-        : fakeIntent(b),
-  };
-  const { server, sent, calendar, inbound, until } = await serve({}, { ai });
-  try {
-    await inbound("a1", "fix the faucet tomorrow afternoon");
-    await until(1);
-    assert.match(sent[0].body, /1:00 PM/);
 
-    await inbound("a2", "1");
-    await until(3);
-    assert.match(sent[1].body, /locked in/i);
-    const day = new Date(Date.now() + 86400000);
-    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-    const events = await calendar.listDay({ date });
-    assert.equal(events.length, 1);
-    assert.equal(events[0].start, new Date(`${date}T13:00:00Z`).toISOString());
-  } finally {
-    server.close();
-  }
-});

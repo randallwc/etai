@@ -18,7 +18,7 @@ channel adapter. Implemented by the phone team as a separate service behind
 the two-endpoint contract in docs/PHONE.md (POST /webhooks/inbound to us,
 POST /send to them); a console transport remains for dev. The agent only
 ever sees a normalized message; transport detail stops at the boundary. See
-docs/INTERFACES.md for component ownership.
+AGENTS.md section 5 for component ownership.
 
 ambiguous workspace. The system of record, wrapped by the calendar team's
 service behind the contract in docs/CALENDAR.md. Calendar events, CRM

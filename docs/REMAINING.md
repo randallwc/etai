@@ -1,8 +1,7 @@
 REMAINING -- open work after the live bring-up
 ================================================
 
-Read docs/FINAL_CLEANUP.md first -- it is the detailed audit of which
-assumptions broke and why. This file is the short list of what is left.
+This file is the short list of what is left.
 
 NOW (correctness, do these first)
 ---------------------------------
@@ -32,7 +31,7 @@ LATER (known gaps, not blocking)
 --------------------------------
 
   5. Open-spot re-offer: on cancel/move, clients waiting on that day
-     should be offered the freed slot. Spec in docs/PLAN.md item 3.
+     should be offered the freed slot.
 
   6. /webhooks/calendar only texts the contractor. Client-facing
      updates from calendar events are not routed through

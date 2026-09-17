@@ -103,7 +103,6 @@ draggable picture-in-picture tile.
 │                              first, before code that touches it.
 │                              Tests in models/tests/ validate all files.
 ├── docs/                      prose documentation, unix format, no tables
-├── scripts/pre-commit.sh      frontend vitest runner (see hook note below)
 ├── messaging/                 phone service: POST /send out, normalized
 │   │                          inbound fanout to subscribers, BlueBubbles +
 │   │                          sim transports. Contract: docs/PHONE.md,
@@ -130,7 +129,6 @@ draggable picture-in-picture tile.
 ├── bus/                       central router: /webhooks/inbound forwards
 │                              to calendar AI, /webhooks/calendar takes
 │                              notifications -> texts via messaging /send
-├── user-interface/            reserved, empty (frontend/ is the real UI)
 └── frontend/                  React + Vite app (self-contained deployable)
     ├── index.html
     ├── package.json

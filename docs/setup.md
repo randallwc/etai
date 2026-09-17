@@ -64,7 +64,5 @@ them on every commit; core.hooksPath=.githooks is set repo-wide.
 
 Frontend tests run with "npm --prefix frontend test" (vitest + v8
 coverage, 80 percent line and branch thresholds on src/api and src/lib).
-scripts/pre-commit.sh runs them, but it is not wired into any active
-hook -- core.hooksPath=.githooks means .git/hooks is bypassed, so
-frontend tests currently do not run on commit. Run them manually before
-committing frontend work, or fold that script into .githooks/pre-commit.
+core.hooksPath=.githooks means .git/hooks is bypassed, so frontend tests
+do not run on commit. Run them manually before committing frontend work.

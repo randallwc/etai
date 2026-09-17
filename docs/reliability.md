@@ -4,8 +4,7 @@ RELIABILITY AND CONCURRENCY
 The product dies the first time a client's text gets no answer. This file
 is the contract for every agent touching the message path: which loops
 must never stop, which operations run in parallel, and which are
-serialized. See docs/SPEC.md for the module map and docs/GOAL.md for
-product intent.
+serialized. See docs/bus.md for the module map.
 
 LISTENERS THAT MUST NEVER STOP
 ------------------------------
