@@ -48,6 +48,12 @@ LATER (known gaps, not blocking)
      30s but the underlying handle() keeps running -- a slow Ambiguous
      call still holds the thread chain.
 
+  10. CopilotKit agent path for sms/imessage: prototyped on the deleted
+     copilot-sms-imessage branch (bus/copilot.js, docs/copilotkit.md,
+     models/copilot-agent.schema.json). Future improvement if the
+     current loop needs a richer agent runtime; recover the code from
+     git history if revived.
+
 DONE AND VERIFIED (for context, not to redo)
 --------------------------------------------
 

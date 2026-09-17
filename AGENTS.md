@@ -95,8 +95,7 @@ draggable picture-in-picture tile.
 /
 ├── README.md
 ├── AGENTS.md                  this file
-├── SHARED_MEMORY.md           live state + landmines for all agents
-├── FAISAL_MEMORY.md           Devin's machine/repo notes
+├── docs/SHARED_MEMORY.md      live state + landmines for all agents
 ├── LICENSE
 ├── package.json               root test script: node --test '*/tests/*.test.js'
 ├── .githooks/pre-commit       runs root npm test (core.hooksPath=.githooks)
