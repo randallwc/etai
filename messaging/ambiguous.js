@@ -1,3 +1,8 @@
+/**
+ * The backend's only Ambiguous boundary: api(), assistantChat,
+ * createTask, upsertContact. Minimum because repo rules require one
+ * file per side and these are the only calls the service makes.
+ */
 const DEFAULT_BASE = "https://app.ambiguous.ai";
 
 function createAmbiguous(env = process.env) {

@@ -1,3 +1,8 @@
+/**
+ * Calendar access: the Ambiguous adapter plus the in-memory stub used
+ * for dev and tests. Minimum because it is the only calendar boundary
+ * and both implementations share this file's slot math.
+ */
 const { randomUUID } = require("node:crypto");
 
 const WORK_START = 9;

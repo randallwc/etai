@@ -1,8 +1,16 @@
+/**
+ * The call UI and the whole frontend flow: mic or typed turns go to
+ * POST /voice/turn, replies are spoken via speechSynthesis, and the
+ * transcript is handed to Ambiguous on hangup. Minimum because the
+ * service client and the speech helper are each used only here, so
+ * they live here instead of in their own modules.
+ */
 import { useEffect, useRef, useState } from "react";
 import AgentSurface from "./AgentSurface.jsx";
 import { sendConversation } from "../api/ambiguous.js";
-import { voiceTurn } from "../api/bus.js";
-import { speak, stopSpeaking } from "../lib/speak.js";
+
+const BUS_URL = import.meta.env.VITE_BUS_URL;
+const CALLER = import.meta.env.VITE_DEMO_PHONE || "+15550000001";
 
 const DONE_RE =
   /^(yes|yeah|yep|yup|that's all|thats all|that is all|all set|done|no|nope|nothing else|i'm good|im good|perfect|great|bye)[.!]?$/i;
@@ -12,9 +20,71 @@ const SR =
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
 
-const CALLER = import.meta.env.VITE_DEMO_PHONE || "+15550000001";
+async function voiceTurn(body) {
+  try {
+    const res = await fetch(`${BUS_URL}/voice/turn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: CALLER, body }),
+    });
+    return res.ok ? (await res.json()).reply ?? null : null;
+  } catch {
+    return null;
+  }
+}
 
-export default function CallScreen({ agent, agents, onSwitch, onExit }) {
+const VOICE_PREFER = [
+  "Google US English",
+  "Microsoft Aria",
+  "Microsoft Jenny",
+  "Microsoft Ava",
+  "Samantha",
+  "Alex",
+];
+
+let speakGen = 0;
+
+function stopSpeaking() {
+  speakGen++;
+  globalThis.speechSynthesis?.cancel();
+}
+
+function pickVoice(voices) {
+  for (const name of VOICE_PREFER) {
+    const v = voices.find((v) => v.name.includes(name));
+    if (v) return v;
+  }
+  return (
+    voices.find((v) => v.lang?.startsWith("en") && v.localService === false) ??
+    voices.find((v) => v.lang?.startsWith("en")) ??
+    null
+  );
+}
+
+function speak(text, voice = {}, { onEnd } = {}) {
+  const g = ++speakGen;
+  let done = false;
+  const finish = () => {
+    if (done || g !== speakGen) return;
+    done = true;
+    clearTimeout(guard);
+    onEnd?.();
+  };
+  const guard = setTimeout(finish, Math.min(15000, 2000 + text.length * 100));
+  const synth = globalThis.speechSynthesis;
+  if (!synth) {
+    setTimeout(finish, Math.min(4000, 800 + text.length * 30));
+    return;
+  }
+  const u = new globalThis.SpeechSynthesisUtterance(text);
+  u.voice = pickVoice(synth.getVoices?.() ?? []);
+  u.pitch = voice?.pitch ?? 1;
+  u.rate = voice?.rate ?? 1;
+  u.onend = u.onerror = finish;
+  synth.speak(u);
+}
+
+export default function CallScreen({ agent }) {
   const [phase, setPhase] = useState("connecting");
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -74,7 +144,7 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     }
 
     setSpeaking(true);
-    const reply = await voiceTurn({ from: CALLER, body: text }).catch(() => null);
+    const reply = await voiceTurn(text);
     setSpeaking(false);
     setTimeout(
       () => agentSay(reply || "Sorry - I can't reach the service right now. Try again in a bit."),
@@ -170,20 +240,6 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
       <AgentSurface agent={agent} speaking={speaking} />
 
       <div className="ft-top">
-        <div className="agent-switcher">
-          {agents.length > 1 &&
-            agents.map((a) => (
-              <button
-                key={a.id}
-                className={`switch-dot ${a.id === agent.id ? "on" : ""}`}
-                style={{ background: a.theme }}
-                title={a.name}
-                onClick={() => onSwitch(a)}
-              >
-                {a.initials}
-              </button>
-            ))}
-        </div>
         <div className="ft-top-right">
           <div className="ft-status">
             {phase === "connecting" && `Calling ${agent.name}…`}
@@ -192,11 +248,6 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
             {phase === "done" &&
               (sendOk ? "Sent to Ambiguous.ai" : "Handoff failed")}
           </div>
-          {onExit && (
-            <button className="ft-exit" onClick={onExit}>
-              Board
-            </button>
-          )}
         </div>
       </div>
 

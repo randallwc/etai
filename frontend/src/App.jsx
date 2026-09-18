@@ -1,125 +1,25 @@
-import { useCallback, useEffect, useState } from "react";
-import { AGENTS } from "./agents.js";
-import {
-  loadBoard,
-  mergeCalendarJobs,
-  saveBoard,
-  transition,
-} from "./lib/jobs.js";
-import { fetchBoard } from "./api/bus.js";
-import { fetchCalendarJobs } from "./api/ambiguous.js";
-import Board from "./components/Board.jsx";
-import JobDetail from "./components/JobDetail.jsx";
+/**
+ * App shell: one persona, one call screen. Minimum because a
+ * single-agent MVP needs no roster module or routing layer.
+ */
 import CallScreen from "./components/CallScreen.jsx";
 
-const RESOLVED = new Set(["done", "canceled"]);
-
-const asList = (v) => (Array.isArray(v) ? v : Object.values(v ?? {}));
-
-function mergeList(local, incoming) {
-  const byId = new Map(asList(incoming).map((x) => [x.id, x]));
-  const known = new Set(local.map((x) => x.id));
-  return [
-    ...local.map((x) => byId.get(x.id) ?? x),
-    ...[...byId.values()].filter((x) => !known.has(x.id)),
-  ];
-}
-
-function mergeBoard(board, remote) {
-  return {
-    ...board,
-    jobs: mergeList(board.jobs, remote.jobs),
-    customers: mergeList(board.customers, remote.customers),
-  };
-}
+const AGENT = {
+  id: "etai",
+  name: "etAI",
+  role: "Dispatch assistant",
+  theme: "#405ef2",
+  initials: "AI",
+  greeting:
+    "Hey, it's etAI. I can move a job, squeeze something new in, or check where things stand. What do you need?",
+  skills: ["rescheduling", "booking", "status updates"],
+  voice: { pitch: 1.05, rate: 1.0 },
+};
 
 export default function App() {
-  const agents = AGENTS;
-  const [board, setBoard] = useState(loadBoard);
-  const [selectedId, setSelectedId] = useState(null);
-  const [callAgent, setCallAgent] = useState(null);
-
-  const syncCalendar = useCallback(() => {
-    fetchCalendarJobs()
-      .then((r) => {
-        if (!r) return;
-        setBoard((b) => {
-          const next = mergeCalendarJobs(b, r.events, r.contacts);
-          saveBoard(next);
-          return next;
-        });
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    syncCalendar();
-  }, [syncCalendar, callAgent]);
-
-  useEffect(() => {
-    let alive = true;
-    async function sync() {
-      const remote = await fetchBoard();
-      if (!remote || !alive) return;
-      setBoard((b) => {
-        const next = mergeBoard(b, remote);
-        saveBoard(next);
-        return next;
-      });
-    }
-    sync();
-    const timer = setInterval(sync, 15000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, []);
-
-  function updateJob(jobId, action) {
-    setBoard((b) => {
-      const next = transition(b, jobId, action);
-      saveBoard(next);
-      return next;
-    });
-  }
-
-  const job =
-    board.jobs.find((j) => j.id === selectedId) ??
-    board.jobs.find((j) => !RESOLVED.has(j.status));
-  const customer = job
-    ? board.customers.find((c) => c.id === job.customerId)
-    : null;
-
   return (
-    <div className="app console">
-      <Board
-        agents={agents}
-        board={board}
-        selectedId={job?.id}
-        onSelectJob={setSelectedId}
-        onCallAgent={setCallAgent}
-      />
-      <main className="pane">
-        {job ? (
-          <JobDetail
-            key={job.id}
-            job={job}
-            customer={customer}
-            contractor={board.contractor}
-            onAction={updateJob}
-          />
-        ) : (
-          <div className="pane-empty">No jobs on the board.</div>
-        )}
-      </main>
-      {callAgent && (
-        <CallScreen
-          agent={callAgent}
-          agents={agents}
-          onSwitch={setCallAgent}
-          onExit={() => setCallAgent(null)}
-        />
-      )}
+    <div className="app">
+      <CallScreen agent={AGENT} />
     </div>
   );
 }

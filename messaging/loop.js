@@ -1,3 +1,8 @@
+/**
+ * The scheduling brain: one normalized message in, calendar tools and
+ * a reply out. Minimum because it is the only file that turns intent
+ * into calendar writes and every helper here serves that path.
+ */
 const { resolveDayRef } = require("./calendar.js");
 const { extractFields } = require("./ai.js");
 
@@ -89,7 +94,7 @@ function optionsText(slots, dateLabel, description) {
  * Tool calls are logged as AgentActions; failures become a plain-language
  * reply, never a throw at the user.
  */
-function createLoop({ calendar, ai, store, notify, createTask, upsertContact, createPacket, contractorPhone, tz = "America/Los_Angeles", now = () => new Date() }) {
+function createLoop({ calendar, ai, store, notify, createTask, upsertContact, contractorPhone, tz = "America/Los_Angeles", now = () => new Date() }) {
   const isContractor = (from) => contractorPhone && from === contractorPhone;
 
   async function reply(to, body) {
@@ -140,20 +145,6 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, cr
     return events.length
       ? `Today's route: ${events.map((e) => `${fmtTime(e.start, tz)} ${e.title}`).join("; ")}.`
       : "Nothing on the calendar today.";
-  }
-
-  async function clientUpdate(phone) {
-    const nowMs = now().getTime();
-    let sent = 0;
-    for (const p of phone ? [phone] : Object.keys(store.data.customers)) {
-      const job = store.jobForPhone(p);
-      if (!job || job.status !== "confirmed" || new Date(job.window.end).getTime() <= nowMs) continue;
-      await record("client_update", { phone: p, jobId: job.id }, () =>
-        reply(p, `You have ${job.description} ${fmtDay(job.window.start, tz)} at ${fmtTime(job.window.start, tz)}. Reply with a new day or time to move it.`)
-      );
-      sent++;
-    }
-    return { sent };
   }
 
   async function propose(msg, intent, mode, jobId, say) {
@@ -286,35 +277,10 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, cr
       source: msg.channel === "voice" ? "call" : "message",
     });
     store.setThread(msg.threadKey, { pendingProposal: null });
-    const packet = createPacket
-      ? await record("job_packet", { jobId: job.id }, () =>
-          createPacket({
-            job,
-            customer,
-            location: p.location,
-            when: `${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}`,
-          })
-        ).catch(() => null)
-      : null;
-    if (packet) {
-      job.packet = packet;
-      store.save();
-    }
-    const link =
-      packet?.formUrl && msg.channel !== "voice"
-        ? ` Quick intake form before the visit: ${packet.formUrl}`
-        : "";
-    const paperwork = packet?.signDocumentId
-      ? " Intake form sent; work auth is drafted in Sign - tap send when ready."
-      : packet
-        ? " Intake form sent to the client."
-        : "";
     await Promise.all([
-      say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.${link}`),
-      msg.channel === "voice" && packet?.formUrl &&
-        reply(msg.from, `Quick intake form before your visit: ${packet.formUrl}`),
+      say(`Locked in: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)}. See you then.`),
       !isContractor(msg.from) &&
-        tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.${paperwork}`),
+        tellContractor(`New booking: ${p.description} ${fmtDay(slot.start, tz)} at ${fmtTime(slot.start, tz)} for ${custName ?? p.customerPhone}.`),
     ]);
   }
 
@@ -612,7 +578,7 @@ function createLoop({ calendar, ai, store, notify, createTask, upsertContact, cr
     return out.reply;
   }
 
-  return { handle, digest, clientUpdate, parseChoice };
+  return { handle };
 }
 
 module.exports = { createLoop, parseChoice, fmtTime, fmtDay };

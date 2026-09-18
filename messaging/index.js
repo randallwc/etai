@@ -1,17 +1,23 @@
+/**
+ * The whole service: HTTP surface, env loading, per-thread queues,
+ * reminder timers, and wiring. Minimum because it is the single
+ * entry point and everything here runs once per process.
+ */
 const http = require("node:http");
 const { join } = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { createTransport } = require("./transports");
-const { createMailPoller } = require("./mailpoller");
-const { fromBlueBubbles, fromSim, fromAmbiguousMail, toE164 } = require("./normalize");
+const { readFileSync, existsSync } = require("node:fs");
+const {
+  createTransport,
+  createMailPoller,
+  fromSim,
+  toE164,
+} = require("./transports.js");
 const { createAmbiguous } = require("./ambiguous.js");
 const { createCalendar } = require("./calendar.js");
 const { createAi } = require("./ai.js");
 const { createStore } = require("./state.js");
-const { createLoop } = require("./loop.js");
-const { createJobPacket } = require("./packet.js");
-const { createTts } = require("./tts.js");
-const { startReminders } = require("./reminders.js");
+const { createLoop, fmtTime } = require("./loop.js");
 
 const REQUIRED_INBOUND = ["channel", "from", "body", "externalId", "receivedAt", "threadKey"];
 const RECENT_CAP = 200;
@@ -25,7 +31,6 @@ function createService(env = process.env, overrides = {}) {
   const calendar = overrides.calendar ?? createCalendar({ ambi, env });
   const ai = overrides.ai ?? createAi({ chat: (m) => ambi.assistantChat(m), env });
   const store = overrides.store ?? createStore(env.STATE_FILE ?? null);
-  const tts = overrides.tts !== undefined ? overrides.tts : createTts({ env });
   const contractorPhone = env.CONTRACT_PHONE ?? env.CONTRACTOR_PHONE;
   const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
 
@@ -54,7 +59,6 @@ function createService(env = process.env, overrides = {}) {
       notify,
       createTask: (t) => ambi.createTask(t),
       upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null,
-      createPacket: ambi.enabled ? (a) => createJobPacket({ ambi, ...a }) : null,
       contractorPhone,
       tz,
     });
@@ -198,7 +202,6 @@ function createService(env = process.env, overrides = {}) {
         transport: transport.name,
         stub: calendar.stub ?? false,
         ambiguous: ambi.enabled,
-        tts: Boolean(tts),
       };
       if (allowedFrom.size) health.allowed = allowedFrom.size;
       if (allowedFrom.size && env.CONTRACT_PHONE && !allowedFrom.has(toE164(env.CONTRACT_PHONE))) {
@@ -208,13 +211,6 @@ function createService(env = process.env, overrides = {}) {
     }
     if (req.method === "GET" && path === "/messages") {
       return reply(res, 200, { messages: recent });
-    }
-    if (req.method === "GET" && path === "/state") {
-      return reply(res, 200, {
-        jobs: Object.values(store.data.jobs),
-        customers: Object.values(store.data.customers),
-        actions: store.data.actions,
-      });
     }
     if (req.method !== "POST") {
       return reply(res, 404, { error: { code: "invalid", message: "not found" } });
@@ -241,16 +237,6 @@ function createService(env = process.env, overrides = {}) {
         return reply(res, 400, { error: { code: "invalid", message: "missing required inbound fields" } });
       }
       return reply(res, 202, handleInbound(body));
-    }
-    if (path === "/webhooks/bluebubbles") {
-      const r = await accept(fromBlueBubbles(body));
-      return reply(res, 202, { accepted: Boolean(r && !r.duplicate && !r.filtered) });
-    }
-    if (path === "/webhooks/ambimail") {
-      console.log("ambimail event:", JSON.stringify(body).slice(0, 2000));
-      const r = await accept(fromAmbiguousMail(body));
-      if (/^(event|calendar)\./.test(body?.type ?? "")) handleCalendarNotification(body);
-      return reply(res, 202, { accepted: Boolean(r && !r.duplicate && !r.filtered) });
     }
     if (path === "/webhooks/calendar") {
       const r = handleCalendarNotification(body);
@@ -292,36 +278,6 @@ function createService(env = process.env, overrides = {}) {
         .finally(() => clearTimeout(timer));
       return reply(res, 200, { reply: result ?? "" });
     }
-    if (path === "/tts") {
-      if (!tts) {
-        return reply(res, 503, { error: { code: "unavailable", message: "tts not installed" } });
-      }
-      if (typeof body.text !== "string" || !body.text) {
-        return reply(res, 400, { error: { code: "invalid", message: "need text" } });
-      }
-      try {
-        const audio = await tts.synthesize(body.text);
-        res.writeHead(200, { "content-type": "audio/mpeg", "access-control-allow-origin": "*" });
-        return res.end(audio);
-      } catch {
-        return reply(res, 502, { error: { code: "upstream", message: "tts failed" } });
-      }
-    }
-    if (path === "/internal/digest") {
-      if (!contractorPhone) {
-        return reply(res, 400, { error: { code: "invalid", message: "CONTRACT_PHONE not set" } });
-      }
-      const text = await loop.digest();
-      await notify({ to: contractorPhone, body: text });
-      return reply(res, 200, { sent: true, text });
-    }
-    if (path === "/internal/client-update") {
-      const result = await loop.clientUpdate(body.phone);
-      if (body.phone && !result.sent) {
-        return reply(res, 400, { error: { code: "invalid", message: "no job for that phone" } });
-      }
-      return reply(res, 200, result);
-    }
     return reply(res, 404, { error: { code: "invalid", message: "not found" } });
   }
 
@@ -336,8 +292,49 @@ function createService(env = process.env, overrides = {}) {
   return { server, loop, store, notify, send, calendar, transport, accept, pollRemoteReminders, mailPoller };
 }
 
+function loadEnv(file = join(__dirname, "..", ".env")) {
+  if (!existsSync(file)) return;
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m) continue;
+    let value = m[2];
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[m[1]] === undefined) process.env[m[1]] = value;
+  }
+}
+
+function startReminders({ store, notify, contractorPhone, tz, leadMinutes = 30 }) {
+  async function tick() {
+    if (!contractorPhone) return;
+    const t = Date.now();
+    for (const job of Object.values(store.data.jobs)) {
+      if (job.status !== "confirmed" || job.remindedAt) continue;
+      const untilStart = new Date(job.window.start).getTime() - t;
+      if (untilStart <= leadMinutes * 60000 && untilStart > -15 * 60000) {
+        await notify({
+          to: contractorPhone,
+          body: `Next up: ${job.description} at ${fmtTime(job.window.start, tz)}. Reply "running N late" and I'll update them.`,
+          threadKey: contractorPhone,
+        });
+        job.remindedAt = new Date().toISOString();
+        store.save();
+      }
+    }
+  }
+  const timer = setInterval(
+    () => tick().catch((e) => console.error(`reminder tick: ${e.message}`)),
+    60_000,
+  );
+  timer.unref?.();
+}
+
 if (require.main === module) {
-  require("../shared/env.js").loadEnv();
+  loadEnv();
   const env = {
     ...process.env,
     STATE_FILE: process.env.STATE_FILE ?? join(__dirname, ".state.json"),
@@ -354,13 +351,13 @@ if (require.main === module) {
       () => svc.pollRemoteReminders().catch((e) => console.error(`[service] reminder poll failed: ${e.message}`)),
       Number(env.REMINDER_POLL_MS ?? 60_000),
     ).unref();
-  });
-  startReminders({
-    store: svc.store,
-    notify: svc.notify,
-    contractorPhone: env.CONTRACT_PHONE,
-    tz: env.CONTRACTOR_TZ ?? "America/Los_Angeles",
-    leadMinutes: Number(env.REMINDER_LEAD_MINUTES ?? 30),
+    startReminders({
+      store: svc.store,
+      notify: svc.notify,
+      contractorPhone: env.CONTRACT_PHONE,
+      tz: env.CONTRACTOR_TZ ?? "America/Los_Angeles",
+      leadMinutes: Number(env.REMINDER_LEAD_MINUTES ?? 30),
+    });
   });
 }
 

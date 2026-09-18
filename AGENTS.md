@@ -7,26 +7,25 @@ guess, this file wins.
 ## 1. Engineering rules
 
 1. No comments in code. Docstrings only on external, well-named
-   functions.
+   functions. Every file opens with a docstring: one sentence on what
+   it is and one on why it is the minimum.
 1. Never use em dashes. Use single hyphens when punctuation needs a dash.
    Keep sentences plain English, short, and to the point.
 1. Delete stale code and docs when replacing a flow.
 1. Keep one source of truth per feature. Update or remove conflicting docs
    in the same change.
-1. Keep README focused on what runs now. Move history and rejected ideas
-   into a short decision log.
+1. Keep README focused on what runs now. Cut features and their upgrade
+   path go in docs/notes.md.
 1. For changes, report only changed files, verification run, and known
    limitation.
-1. Avoid filler terms such as “robust,” “seamless,” “comprehensive,”
-   “leverages,” and “future-proof.”
+1. Avoid filler terms such as "robust," "seamless," "comprehensive,"
+   "leverages," and "future-proof."
 1. Every new file needs a named owner and a reason it cannot fit an
    existing file.
 1. Prefer concrete acceptance criteria over vague product language.
 1. Always pull with rebase before pushing. Use autostash when the worktree
    has other agents' changes, then resolve any restore conflicts without
    changing their work.
-1. Always create a schema before writing code and commit it first,
-   under `models/`.
 1. Keep documents in `./docs`, unix format, no tables. Prose summaries
    of each external part; document gotchas and tried-and-rejected
    approaches so others can learn.
@@ -61,22 +60,19 @@ guess, this file wins.
    11:00 AM, or 1:00 PM open Fri. Which works?"); replies still parse as
    number, ordinal, or time. The persona name appears only in the
    greeting - never brand a reply.
-1. Tests: up to 80% line and branch coverage per commit, enforced by a
-   git hook that runs tests on commit creation. Do not over-test or
-   split code just to hit the number; test shared things more.
+1. Tests: smoke-level only. Root `npm test` proves the service path;
+   frontend tests cover the api boundary. Do not rebuild unit suites.
 
 ## 2. Project mission
 
-A **call-your-agent** web app on top of Ambiguous.ai. The user opens the
-app and is immediately in a FaceTime-style call with a personal agent.
-The agent offers a day summary or takes requests - scheduling requests
-book real calendar events after checking free/busy availability; other
-requests become tasks. On hang up, the full transcript is stored in the
-workspace as a document so coworkers can validate what was agreed.
+A personal MVP: a **call-your-agent** web app plus a text-in text-out
+scheduling service on top of Ambiguous.ai. The user opens the app and
+is immediately in a FaceTime-style call with the etAI agent.
+Scheduling requests book real calendar events after checking
+free/busy availability; other requests become tasks. On hang up, the
+transcript is stored in the workspace as a document.
 
-Every agent has a distinct persona: name, role, theme color, greeting.
-The call UI is the agent's full-screen visual plus the user's camera in a
-draggable picture-in-picture tile.
+One agent, one persona, one scheduling brain.
 
 ## 3. Repository layout
 
@@ -87,50 +83,36 @@ draggable picture-in-picture tile.
 ├── LICENSE
 ├── package.json               scripts: test, start, dev, build
 ├── .githooks/pre-commit       runs root npm test (core.hooksPath=.githooks)
-├── models/                    JSON Schemas - schema first, before code
-│                              that touches the shape. Only live
-│                              contracts stay here (intent.schema.json).
 ├── docs/                      prose documentation, unix format, no tables
 ├── messaging/                 THE service - texts and voice turns in,
 │   │                          replies out. One process, no deps.
 │   │                          Docs: docs/messaging.md
-│   ├── index.js               HTTP + wiring (createService); inbound
-│   │                          enqueues per threadKey into the loop
-│   ├── transports.js          outbound providers: bluebubbles,
-│   │                          ambimail, sim
-│   ├── normalize.js           provider payloads -> normalized inbound
-│   ├── mailpoller.js          Ambiguous inbox poll for SMS replies
+│   ├── index.js               HTTP surface, env, per-thread queues,
+│   │                          reminder timer, wiring (createService)
+│   ├── transports.js          the wire: ambimail + sim transports,
+│   │                          inbound normalization, mail poller
 │   ├── loop.js                intent -> calendar tools -> reply
-│   ├── ai.js                  assistant/chat intent classification
-│   ├── prompts.js             per-channel classify prompts
+│   ├── ai.js                  assistant/chat classification + prompts,
+│   │                          keyword fallback
 │   ├── calendar.js            calendar adapter + stub fallback
 │   ├── state.js               threads/jobs/customers/dedup/action log
-│   ├── reminders.js           pre-job heads-up texts
-│   ├── packet.js              booking paperwork: intake form, work
-│   │                          order doc, Sign draft, CRM deal, task
 │   ├── ambiguous.js           THE backend Ambiguous boundary
-│   ├── tts.js                 neural TTS for the call UI
 │   └── tests/smoke.test.js    high-level smoke tests only
-├── shared/                    zero-dep helpers
-│   └── env.js                 .env loader (no override of set vars)
 └── frontend/                  React + Vite app (self-contained deployable)
     ├── index.html
     ├── package.json
     ├── vite.config.js
-    ├── vitest.config.js       coverage thresholds: 80% on src/api + src/lib
+    ├── vitest.config.js       coverage thresholds: 80% on src/api
     ├── .env.local             VITE_AMBIGUOUS_API_KEY, VITE_BUS_URL
     │                          (gitignored)
     └── src/
         ├── main.jsx           entry point
-        ├── App.jsx            console shell: board, job detail, call overlay
-        ├── agents.js          the single etAI persona
+        ├── App.jsx            shell + the single AGENT persona
         ├── styles.css         all styling, CSS custom properties
-        ├── api/ambiguous.js   THE Ambiguous boundary - only file with
-        │                      fetch for Ambiguous
-        ├── api/bus.js         transport to the service: voiceTurn,
-        │                      synthSpeech, fetchBoard
+        ├── api/ambiguous.js   THE Ambiguous boundary - transcript docs
         └── components/
-            ├── CallScreen.jsx     call UI + conversation state machine
+            ├── CallScreen.jsx     call UI, conversation machine,
+            │                      voiceTurn + speak helpers
             └── AgentSurface.jsx   full-screen agent visual (Rive pin)
 ```
 
@@ -167,7 +149,7 @@ before touching either file.
 
 Per-thread state lives in `messaging/state.js`; the store is the only
 mutable model. `CallScreen.jsx` owns the call phase machine:
-connecting, live, sending, done. Personas are data in `agents.js`,
+connecting, live, sending, done. The persona is data in `App.jsx`,
 never hardcoded in a component. `AgentSurface` renders whatever visual
 the persona defines; keep its props (`agent`, `speaking`) stable.
 

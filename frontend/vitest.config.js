@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     coverage: {
       provider: "v8",
-      include: ["src/api/**", "src/lib/**"],
+      include: ["src/api/**"],
       thresholds: { lines: 80, branches: 80 },
     },
   },

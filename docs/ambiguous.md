@@ -11,9 +11,9 @@ One boundary per side, never fetch it anywhere else:
 
   messaging/ambiguous.js        backend: calendar CRUD, tasks, CRM,
                                 assistant/chat
-  frontend/src/api/ambiguous.js browser: calendar + contacts, transcripts
-  messaging/transports.js       ambimail outbound via /api/mail/send
-  messaging/mailpoller.js       inbound via /api/mail/inbox
+  frontend/src/api/ambiguous.js browser: call transcript documents
+  messaging/transports.js       ambimail via /api/mail/send outbound,
+                                /api/mail/inbox inbound (poller)
 
 Env: AMBIG_API or AMBIGUOUS_API_KEY, AMBIGUOUS_BASE_URL. Keys live in
 repo-root .env, never in code.
@@ -53,12 +53,16 @@ VERIFIED ENDPOINTS (live 2026-09-12)
                                       scheduling stays on primitives
   POST /api/forms                     intake form; public fill page at
                                       /f/{workspace_slug}/{slug}
+                                      (packet flow - deleted, see
+                                      docs/notes.md)
   POST /api/sign                      draft from a doc; signers, fields
                                       (0-1 coords), prepare-send works,
                                       confirm-send returns
                                       CONFIRM_REQUIRES_HUMAN - a human
-                                      taps send in the Sign UI
+                                      taps send in the Sign UI (packet
+                                      flow - deleted)
   POST /api/crm/deals, /api/crm/activities    booking paperwork trail
+                                      (packet flow - deleted)
   GET  /api/calendars/upcoming-reminders?window_hours=   reminder feed;
                                       only events that HAVE reminders
   GET  /api/mail/inbox?unread=true    carrier-gateway SMS replies

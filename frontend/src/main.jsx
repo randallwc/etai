@@ -1,3 +1,7 @@
+/**
+ * Vite entry point: mounts App. Minimum by definition - React needs
+ * exactly one bootstrap file.
+ */
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";

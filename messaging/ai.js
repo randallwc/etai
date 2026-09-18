@@ -1,5 +1,31 @@
+/**
+ * Intent classification: Ambiguous assistant/chat with a regex
+ * fallback, plus the channel prompts. Minimum because it is the only
+ * AI surface and the fallback is what makes demos work offline.
+ */
 const { partsInTz } = require("./calendar.js");
-const { channelPrompt } = require("./prompts.js");
+
+const CHANNELS = {
+  sms: [
+    "This turn arrived as an SMS text.",
+    "Expect terse fragments, abbreviations, and missing punctuation.",
+    "The reply goes back as one plain SMS -- never markdown, links, or emoji.",
+  ].join("\n"),
+  imessage: [
+    "This turn arrived as an iMessage text.",
+    "The reply goes back as plain iMessage text -- no markdown or emoji.",
+  ].join("\n"),
+  voice: [
+    "This turn arrived as transcribed speech on a phone call.",
+    "Expect disfluencies, restarts, and missing punctuation; numbers may be",
+    'spelled out ("running twenty late" means delayMinutes 20).',
+    "The reply is spoken aloud -- still return only the JSON.",
+  ].join("\n"),
+};
+
+function channelPrompt(channel) {
+  return CHANNELS[channel] ?? CHANNELS.sms;
+}
 
 const INTENTS = ["book", "day_summary", "running_late", "cancel", "reschedule", "eta", "clarify", "other"];
 
@@ -145,8 +171,8 @@ function normalize(raw) {
 }
 
 /**
- * The agent's AI reader: classify an inbound text into the intent contract
- * (models/intent.schema.json) via Ambiguous assistant/chat. `chat` is a
+ * The agent's AI reader: classify an inbound text into the intent shape
+ * above via Ambiguous assistant/chat. `chat` is a
  * (prompt) => assistant response body function; injectable for tests.
  * Falls back to {intent:"other"} on any failure -- never throws.
  */

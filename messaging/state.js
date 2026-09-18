@@ -1,3 +1,8 @@
+/**
+ * The store: dedup, customers, jobs, threads, action log, JSON-file
+ * persistence. Minimum because it is the only state owner and every
+ * function mutates or reads that one map.
+ */
 const { existsSync, readFileSync } = require("node:fs");
 const { writeFile } = require("node:fs/promises");
 const { randomUUID } = require("node:crypto");
@@ -7,7 +12,7 @@ const SEEN_CAP = 5000;
 /**
  * Agent state: seen message ids, customers, jobs, threads, action log.
  * Persists to a JSON file on every mutation when `file` is set; pass null
- * for memory-only (tests). Shapes follow models/*.schema.json.
+ * for memory-only (tests).
  */
 function createStore(file = null) {
   const data = {

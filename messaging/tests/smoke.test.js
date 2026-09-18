@@ -1,3 +1,8 @@
+/**
+ * Smoke tests for the MVP path: booking offer, dedup, /send,
+ * /voice/turn, calendar notify, healthz. Minimum because it proves
+ * the service end-to-end without unit-testing internals.
+ */
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { createService } = require("../index.js");
@@ -30,7 +35,6 @@ async function serve(overrides = {}) {
       store: createStore(null),
       calendar: stubCalendar("UTC"),
       ambi: { enabled: false },
-      tts: null,
       ...overrides,
     },
   );

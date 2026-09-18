@@ -1,3 +1,8 @@
+/**
+ * The agent's visual surface: the Rive pin pulses while the agent
+ * speaks. Minimum because it is one presentational component with no
+ * state of its own.
+ */
 import { useEffect } from "react";
 import { useRive, useStateMachineInput } from "@rive-app/react-canvas";
 
