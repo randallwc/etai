@@ -2,244 +2,173 @@ THE SERVICE -- texts and calls in, replies out
 ==============================================
 
 messaging/ is the whole backend: one Node process, no dependencies. A
-text or voice turn comes in through a transport webhook (or the mail
-poller), gets normalized and deduped, runs through the scheduling loop,
-and the reply goes back out the same transport. There is no second
-service and no HTTP hop between the phone layer and the brain.
-
-Run it: `npm start` (node messaging/index.js, PORT default 4020).
+text or voice turn arrives through a transport webhook or the mail
+poller, is normalized and deduped, runs through the scheduling loop
+in-process, and the reply leaves by the same transport. Run it:
+`npm start` (PORT default 4020).
 
 MODULES
 -------
 
-  index.js      HTTP + wiring. createService(env, overrides) builds the
-                transport, Ambiguous client, calendar, ai, store, loop,
-                and tts; every piece is injectable for tests. Inbound
-                messages enqueue per threadKey and run the loop
-                in-process; a WORKING_BEAT_MS timer (default 1500) texts
-                "On it - checking the schedule now." when a turn runs
-                long.
-  transports.js Outbound providers. Selection: bluebubbles (when
-                BLUEBUBBLES_URL + BLUEBUBBLES_PASSWORD are set) ->
-                ambimail (AMBIG_API) -> sim (stdout, sim-* ids).
-  normalize.js  Provider payloads -> the normalized inbound shape:
-                { channel, from, body, externalId, receivedAt,
-                threadKey }. threadKey is the counterparty phone so
-                threads stay stable across transports.
-  mailpoller.js Polls the Ambiguous mail inbox for carrier-gateway SMS
-                replies; see INBOUND VIA MAIL POLLING below.
-  loop.js       The brain: normalized message -> intent -> calendar
-                tools -> reply. Owns the business logic and the exact
-                reply text. Per-thread pendingProposal state makes the
-                two-phase booking flow work.
-  ai.js         Intent classification via Ambiguous assistant/chat
-                (models/intent.schema.json). A failed or unparseable
-                response falls back to keyword classification, so the
-                loop works without a key.
-  prompts.js    Per-channel system prompts for classification (sms,
-                imessage, voice).
-  calendar.js   Calendar adapter: listDay, proposeSlots, createEvent,
-                updateEvent, cancelEvent, sync, plus timezone helpers.
-                With no Ambiguous key it returns an in-memory
-                stubCalendar so tests exercise the same interface.
-  state.js      createStore(file|null): threads, jobs, customers,
-                dedup set, AgentAction tool log. file=null is memory-
-                only for tests; a path persists to JSON on every
-                mutation.
-  reminders.js  Pre-job heads-up texts to the contractor inside
-                REMINDER_LEAD_MINUTES of each job. Fires once per job.
-  packet.js     Booking paperwork after a job lands: intake form,
-                work-order doc, Sign draft, CRM deal, follow-up task.
-  ambiguous.js  The ONLY file that fetches Ambiguous (backend mirror
-                of the frontend src/api/ambiguous.js boundary rule).
-  tts.js        Neural TTS for the call UI's spoken replies.
+  index.js      HTTP + wiring. createService(env, overrides) builds
+                everything injectable for tests. Turns enqueue per
+                threadKey; WORKING_BEAT_MS (1500) texts "On it" when a
+                turn runs long.
+  loop.js       The brain: message -> intent -> calendar tools ->
+                reply. Owns business logic and reply text; per-thread
+                pendingProposal makes the two-phase booking work.
+  ai.js         assistant/chat intent classification
+                (models/intent.schema.json); falls back to keywords on
+                failure or no key. prompts.js holds the per-channel
+                prompts.
+  calendar.js   listDay, proposeSlots, createEvent, updateEvent,
+                cancelEvent, sync, tz helpers; in-memory stubCalendar
+                with no key.
+  state.js      threads, jobs, customers, dedup set, action log;
+                persists to STATE_FILE per mutation, memory-only when
+                null.
+  transports.js outbound providers: bluebubbles -> ambimail -> sim.
+  normalize.js  provider payloads -> { channel, from, body,
+                externalId, receivedAt, threadKey }; threadKey is the
+                counterparty phone.
+  mailpoller.js Ambiguous inbox poll for carrier-gateway SMS replies.
+  reminders.js  pre-job heads-up texts to the contractor inside
+                REMINDER_LEAD_MINUTES.
+  packet.js     booking paperwork: intake form, work order, Sign
+                draft, CRM deal, follow-up task.
+  ambiguous.js  THE backend Ambiguous boundary - only file that
+                fetches it (frontend twin: src/api/ambiguous.js).
+  tts.js        neural TTS for the call UI.
 
 ENDPOINTS
 ---------
 
-POST /send -- { to (E.164), body } -> 200 { externalId }. Outbound
-bodies are branded "etAI update: <body>" here so every text is signed
-uniformly.
-
-POST /webhooks/bluebubbles, /webhooks/ambimail -- provider webhook
-targets; payloads are normalized then accepted. Always 202.
-
-POST /webhooks/inbound -- an already-normalized inbound message
-(channel, from, body, externalId, receivedAt, threadKey). Dedups on
-externalId, answers 202, processes async.
-
-POST /webhooks/calendar -- a calendar notification ({ id, kind in
-created|updated|deleted|reminder, summary or event.title, startAt }).
-Dedups on "cal:"+id, answers 202, texts the contractor, triggers a
-calendar sync.
-
-POST /simulate/inbound -- { from, body, channel? } through the
-identical normalize -> dedup -> loop path as a real text; the whole
-service is exercisable without a phone.
-
-POST /voice/turn -- { from (E.164), body, threadKey?, externalId? } ->
-200 { reply }. The reply is returned in the body for the caller to
-hear, NOT texted; notifications to the other party still go out as
-texts. Per-thread queue waits for the real turn; a TURN_TIMEOUT_MS
-timer (default 30s) only bounds the caller-facing reply, which becomes
-"still working on it - I'll text you when it's done". Retries with the
-same externalId get { reply:"", duplicate:true }.
-
-POST /tts -- { text } -> audio/mpeg, or 503 when tts is not installed.
-
-POST /internal/digest -- texts the contractor today's route.
-POST /internal/client-update -- texts each client their next confirmed
-booking plus a reschedule offer; optional { phone } scopes it.
-
-GET /state -- { jobs, customers, actions } for the dispatch board.
-GET /messages -- last 200 inbound, for debugging.
-GET /healthz -- { ok, transport, stub, ambiguous, tts }.
+  POST /send                 { to E.164, body } -> { externalId };
+                             brands bodies "etAI update: <body>"
+  POST /webhooks/bluebubbles provider events -> normalize -> accept
+  POST /webhooks/ambimail    same, plus event.* -> calendar notify
+  POST /webhooks/inbound     normalized message -> dedup -> 202 -> loop
+  POST /webhooks/calendar    { id, kind, summary|event.title, startAt }
+                             -> dedup "cal:"+id -> text contractor ->
+                             calendar sync
+  POST /simulate/inbound     { from, body } through the real path
+  POST /voice/turn           { from, body, threadKey?, externalId? } ->
+                             { reply }; reply returned in body, never
+                             texted; TURN_TIMEOUT_MS (30s) bounds only
+                             the caller-facing reply ("still working on
+                             it - I'll text you when it's done"), the
+                             queued turn still completes
+  POST /tts                  { text } -> audio/mpeg, 503 w/o dep
+  POST /internal/digest      texts contractor today's route
+  POST /internal/client-update  texts clients their next booking;
+                             optional { phone } scopes it
+  GET  /state                { jobs, customers, actions } for the board
+  GET  /messages             last 200 inbound
+  GET  /healthz              { ok, transport, stub, ambiguous, tts }
 
 INTENTS
 -------
 
-ai.js classifies into book, reschedule, cancel, running_late,
-day_summary, other. The loop then:
-
-  book        -> proposeSlots offers up to 3 numbered open times; the
-                 reply picks by number, ordinal, or clock time. Books
-                 the event, builds the job packet, replies "Locked in",
-                 texts the contractor.
-  reschedule  -> same proposal flow; updateEvent moves the event.
-  cancel      -> cancelEvent; the other party is told the slot is free.
-  running_late-> updateEvent shifts the next job by delayMinutes; the
-                 client gets the new ETA.
-  day_summary -> listDay formatted as a route line.
-  other       -> contractor's message becomes an Ambiguous task; a
-                 client gets a short help text.
-
-Working hours are 9-17 with 90-minute spacing; jobs default to 60
-minutes. Client-originated changes always notify the contractor;
-contractor-originated changes notify the affected client.
+book -> offer up to 3 numbered slots; reply picks by number, ordinal,
+or time; book event, run packet, "Locked in" + form link, text
+contractor. reschedule -> same flow, updateEvent. cancel ->
+cancelEvent, tell the other party, offer rebook. running_late ->
+shift next job by delayMinutes, text client new ETA. day_summary ->
+route line. other -> contractor text becomes a task; client gets help
+text. Working hours 9-17, 90-minute spacing, 60-minute default.
+Client changes notify the contractor; contractor changes notify the
+affected client.
 
 ENV
 ---
 
-  PORT                  listen port (default 4020)
-  AMBIG_API             Ambiguous ak_ key; unset -> stub calendar,
-                        sim-friendly behavior
-  AMBIGUOUS_BASE_URL    defaults to https://app.ambiguous.ai
-  CONTRACT_PHONE        contractor's E.164 number: identifies the boss,
-                        digest and reminder target
-  CONTRACTOR_TZ         IANA tz for slot math (default
-                        America/Los_Angeles)
-  STATE_FILE            JSON persistence path (default
-                        messaging/.state.json at startup)
-  BLUEBUBBLES_URL       Cloudflare tunnel URL of the BlueBubbles server
-  BLUEBUBBLES_PASSWORD  its API password
-  CARRIER_GATEWAY       fallback gateway domain (default vtext.com)
-  GATEWAY_MAP           per-recipient carrier overrides, see below
-  ALLOWED_FROM          comma-separated E.164 senders to accept; empty
-                        accepts everyone
-  WORKING_BEAT_MS       delay before the "On it" text (default 1500)
-  TURN_TIMEOUT_MS       voice-turn caller-facing timeout (default 30000)
-  REMINDER_LEAD_MINUTES pre-job heads-up window (default 30)
-  REMINDER_WINDOW_HOURS remote reminder poll lookahead (default 24)
-  REMINDER_POLL_MS      remote reminder poll interval (default 60000)
-  CALENDAR_SYNC_MS      calendar mirror sync interval (default 30000)
-  MAIL_POLL_SECONDS     inbox poll interval (default 15; 0 disables)
-  MAIL_POLL_LIMIT       inbox page size per poll (default 20)
-  FETCH_TIMEOUT_MS      ceiling on outbound fetches (default 8000,
-                        transport sends 15000)
+  PORT 4020 . STATE_FILE . CONTRACT_PHONE (the boss, digest + reminder
+  target) . CONTRACTOR_PHONE alias . CONTRACTOR_TZ (default
+  America/Los_Angeles)
+  AMBIG_API or AMBIGUOUS_API_KEY (unset -> stub calendar) .
+  AMBIGUOUS_BASE_URL
+  BLUEBUBBLES_URL . BLUEBUBBLES_PASSWORD
+  CARRIER_GATEWAY (default vtext.com) . GATEWAY_MAP (see below)
+  ALLOWED_FROM (E.164 allowlist; empty accepts all)
+  WORKING_BEAT_MS 1500 . TURN_TIMEOUT_MS 30000
+  REMINDER_LEAD_MINUTES 30 . REMINDER_WINDOW_HOURS 24 .
+  REMINDER_POLL_MS 60000 . CALENDAR_SYNC_MS 30000 . CALENDAR_SYNC_DAYS 45
+  AI_CLASSIFY_TIMEOUT_MS 15000 . MAIL_POLL_SECONDS 15 . MAIL_POLL_LIMIT 20
+  FETCH_TIMEOUT_MS 8000 . TTS_VOICE . CALENDAR=memory forces the stub
 
-The entry point loads repo-root .env via shared/env.js (never
-overrides vars already set). No public URL is needed for the service
-itself -- only provider webhooks need a reachable address.
+Repo-root .env loads via shared/env.js at startup (never overrides set
+vars). No public URL needed unless registering provider webhooks.
 
-CARRIER GATEWAYS -- per-recipient ambimail routing
---------------------------------------------------
+REMINDERS
+---------
 
-ambimail delivers by mailing <digits>@<gateway>. A carrier gateway only
-delivers to its own subscribers: send an AT&T number to vtext.com and
-Verizon accepts the mail, drops the SMS, and reports nothing -- the
-/send caller gets a 200 with a real externalId and no error exists on
-any side. The demo hit exactly this once (AT&T gateway, Verizon phone,
-silence). The only fix is routing each known number to the right
-domain.
+Two overlapping paths, both contractor-only: reminders.js watches the
+job store for agent-booked jobs; pollRemoteReminders() polls Ambiguous
+GET /calendars/upcoming-reminders?window_hours= every REMINDER_POLL_MS
+for events made elsewhere (that feed only covers events that HAVE
+reminders). POST /webhooks/calendar is the push variant once the
+service has a public URL. Dedup "cal:"+id means a restart re-delivers
+a still-due reminder once.
 
-GATEWAY_MAP is comma-separated num:domain[+domain...] entries keyed on
-the 10-digit number, and every listed domain is sent -- only the real
-carrier delivers, the rest are silent drops that cost nothing. Pin a
-known handset to one domain (5550100100:vtext.com for the Verizon demo
-phone, 5550100101:txt.att.net for the AT&T one); blast unknowns with a
-domain per likely carrier. Malformed entries are ignored, never a
-crash. Numbers not in the map fall back to CARRIER_GATEWAY.
+CARRIER GATEWAYS
+----------------
 
-INBOUND VIA MAIL POLLING
-------------------------
+ambimail delivers by mailing <digits>@<gateway>. A gateway only
+delivers to its own carrier's subscribers: AT&T number to vtext.com is
+accepted, silently dropped, and /send still returns 200. No error
+exists on any side -- the demo hit exactly this. GATEWAY_MAP is
+num:domain[+domain...] keyed on the 10-digit number; every listed
+domain is sent and only the real carrier delivers. Pin known numbers
+to one domain; numbers not in the map fall back to CARRIER_GATEWAY.
 
-When a client replies to an ambimail text, the carrier gateway turns
-the SMS into an email that lands in the Ambiguous workspace mail inbox,
-sent from the number's gateway address (e.g. 5550100100@vzwpix.com).
-The mailpoller closes that loop: whenever AMBIG_API (or
-AMBIGUOUS_API_KEY) is set it polls GET /api/mail/inbox?unread=true
-every MAIL_POLL_SECONDS, turns each unread item into a normalized
-inbound message, and feeds it through the same dedup -> loop path as
-the webhook transports.
+MAIL POLLING
+------------
 
-Phone derivation only accepts sender (or Reply-To) addresses on known
-carrier gateway domains -- vtext.com, vzwpix.com, vmobl.com,
-txt.att.net, messaging.sprintpcs.com, tmomail.net, and friends, plus
-whatever CARRIER_GATEWAY names. A ten-digit local part becomes
-+1<number>. Mail from ordinary addresses is logged once, skipped, and
-marked read. Skipped ids are remembered in memory (capped at 5000) so
-a failed mark-read does not re-log the same mail.
+A client replying to an ambimail text lands in the Ambiguous mail
+inbox as an email from <number>@<gateway>. The poller reads
+GET /api/mail/inbox?unread=true every MAIL_POLL_SECONDS, accepts only
+senders on known gateway domains (ten-digit local part -> +1<number>),
+cuts the body at quoted/"On ... wrote:"/"Sent from my" lines, feeds it
+through the same accept() path, then marks it read. Other mail is
+logged once, marked read, skipped (cap 5000 remembered ids). Dedup key
+"ambmail-<uuid>" collapses mail arriving via both poll and
+/webhooks/ambimail push. Caveats: only replies to ambimail texts
+arrive; latency is one poll interval plus the carrier hop; channel is
+"sms" not "imessage"; polls serialize rather than stack.
 
-The body is the first non-quoted block of body_text: lines starting
-with ">", an "On ... wrote:" header, separator runs, or "Sent from my
-..." terminate the reply. Consumed items are acked with PATCH
-/api/mail/{id} {read:true}, and dedup keys on externalId
-"ambmail-<email uuid>". Polls are serialized: a poll that outlasts
-MAIL_POLL_SECONDS short-circuits the overlapping tick.
+CONCURRENCY
+-----------
 
-Caveats: this only sees replies to ambimail texts; a client texting a
-fresh number reaches nothing. Latency is up to one poll interval plus
-the carrier's email-to-SMS hop. Channel is "sms", not "imessage".
+Turns serialize per threadKey ("book" then "1" process in order);
+threads interleave freely. Dedup claims are synchronous and atomic.
+The calendar rejects overlapping confirmed events ({code:"conflict"})
+as the backstop. Mail batches and calendar pushes run in parallel;
+Ambiguous calls are bounded and classify falls back to keywords.
+Dedup is in-memory, so a restart re-accepts a redelivered message
+once. New entry points go through enqueue(), never loop.handle
+directly.
 
-TESTING WITHOUT A PHONE
------------------------
+TESTING
+-------
 
-Run the service, POST /simulate/inbound, watch the sim transport log
-replies to stdout. The smoke suite (messaging/tests/smoke.test.js,
-`npm test`) covers the same path with an in-memory calendar and fake
-transport.
-
-Real iMessage needs a Mac signed into iMessage with the BlueBubbles
-server: enable its Cloudflare tunnel, point its webhook at
+`npm test` runs the smoke suite (in-memory calendar, fake transport)
+covering book, dedup, /send, /voice/turn, calendar notify, healthz.
+Live check without a phone: run the service, POST /simulate/inbound,
+watch the sim transport log replies. Real iMessage needs a Mac with
+BlueBubbles: enable its tunnel, point its webhook at
 /webhooks/bluebubbles, export BLUEBUBBLES_URL and BLUEBUBBLES_PASSWORD.
 
 GOTCHAS
 -------
 
-Dedup is on externalId and in-memory -- a restart re-accepts the same
-id once. Providers retry, so a persisted dedup or idempotent loop is
-the upgrade path if that matters.
-
-POST bodies are capped at 1 MiB; over that the service drains the
-upload and replies 413. Malformed JSON gets 400.
-
-BlueBubbles echoes our own sends as new-message events with
-isFromMe=true; they are filtered before the loop or the agent answers
-itself. BlueBubbles takes its password in the URL query string; never
-log outbound request URLs.
-
-Ambiguous availability is member-centric: busy slots exist only for
-the contractor's workspace user. Client calendars are never consulted.
-
-Late and cancel flows text the client only for jobs booked through the
-agent (the job record links the event id to the customer's phone).
-Events created elsewhere have no client phone, so the contractor still
-gets confirmation but no client text goes out.
-
-Tool failures never reach the user as errors: the loop replies
-"couldn't reach the calendar, try again in a minute" and the failed
-call is logged in the action log.
-
-CRM sync is best-effort: a booking upserts the client into the
-workspace CRM via ambi.upsertContact inside the recorded action;
-failure is swallowed and the booking still completes.
+- BlueBubbles echoes our sends with isFromMe=true; filtered or the
+  agent answers itself. Its password rides in the URL query -- never
+  log outbound URLs.
+- Bodies capped at 1 MiB -> 413; malformed JSON -> 400.
+- Availability is member-centric: only the contractor's workspace user
+  has busy slots; client calendars are never consulted.
+- Late/cancel texts reach the client only for agent-booked jobs (the
+  job record links event id to client phone).
+- Tool failures never surface as errors: the loop replies "couldn't
+  reach the calendar, try again in a minute" and logs the action.
+- CRM upsert is best-effort; failure is swallowed, booking completes.

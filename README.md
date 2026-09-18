@@ -4,15 +4,6 @@
 
 **AI Tinkerers Seattle Hackathon 2026** · [Hackathon page](https://seattle.aitinkerers.org/hackathons/h_GfcjwcUkasM/teams) · [Ambiguous.ai](https://app.ambiguous.ai/settings)
 
-## theme
-
-Agents are leaving the chatbox. Build an agent for a place people
-already work, talk, or live, then make it meaningfully more useful
-because of that context. Put it into the web, mobile, Slack, Teams,
-messaging, browsers, voice, wearables, robotics, or somewhere nobody
-expects to find one yet. What becomes possible when the agent shows up
-where the work is already happening?
-
 A dispatcher you text. Contractors and clients book, reschedule, and
 cancel appointments over iMessage, SMS, and calls; an Ambiguous.ai
 workspace is the calendar of record. A FaceTime-style web app
@@ -38,23 +29,13 @@ calendar, and the reply goes back out the same transport.
 ## docs
 
 - [The service](docs/messaging.md): modules, endpoints, intents,
-  transports, carrier gateways, mail polling, and gotchas.
-- [Calendar notifications](docs/notifications.md): reminder polling to
-  contractor texts, including delivery and dedup behavior.
-- [Ambiguous integration](docs/ambiguous-integration.md): verified
-  workspace endpoints, authentication, platform limitations, and
-  rejected approaches.
-- [External integrations](docs/INTEGRATIONS.md): integration map and
-  the single Ambiguous boundary owned by each component.
-- [Frontend](docs/frontend.md): call-your-agent UI flow and roadmap.
-- [Reliability](docs/reliability.md): which loops must never stop and
-  where things must not race.
-- [Setup](docs/setup.md): workspace provisioning, CLI authentication,
-  commands, tests, and hooks.
+  transports, and gotchas.
+- [Frontend](docs/frontend.md): the call-your-agent web app.
+- [Ambiguous](docs/ambiguous.md): the workspace integration - verified
+  endpoints, setup, gotchas.
 - [Behaviors](docs/behaviors.md): what the code does that the smoke
   tests no longer pin down.
-- [Logo explorations](docs/logo/index.html): preview page for the ETAi
-  wordmark and icon variants.
+- [Remaining](docs/REMAINING.md): open work.
 
 ## quick start
 

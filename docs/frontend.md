@@ -1,116 +1,36 @@
 FRONTEND -- the call-your-agent web app
 ========================================
 
-WHAT IT IS
-----------
+frontend/ is a React + Vite app that drops you straight into a
+FaceTime-style call with the etAI persona (src/agents.js). Each user
+turn goes to the service: voiceTurn() in src/api/bus.js posts
+VITE_BUS_URL/voice/turn and the reply is what the agent speaks. The
+caller is VITE_DEMO_PHONE so the call shares one thread with SMS -
+same intents, bookings, CRM sync, notifications. When the service is
+unreachable the agent says so; there is no in-browser scheduling
+fallback, so a booking can never diverge from the service calendar.
 
-A web app (frontend/, React + Vite) that lets users call or FaceTime
-their personal AI agent for a quick, human-feeling conversation. The
-agent has a short chat with the user, then hands the structured result
-to Ambiguous.ai, which handles scheduling and planning afterwards.
+The dispatch board (App.jsx) reads GET /state via fetchBoard() and
+calendar events + CRM contacts via fetchCalendarJobs() in
+src/api/ambiguous.js - the only frontend file that fetches Ambiguous.
+On hang up, sendConversation() stores the transcript as a workspace
+document.
 
-The app drops you straight into a FaceTime-style call. Grant camera and
-mic permission when prompted.
+AgentSurface renders public/map-pin-marker.riv (vendored, 2.9 KB) via
+@rive-app/react-canvas; its `isSelecting` boolean binds to `speaking`,
+so the pin lifts while the agent talks. The orb stays mounted behind
+the canvas as the load fallback.
 
-THE FLOW
---------
+RUN
+---
 
-    User texts or calls the agent
-            |
-            v
-    Agent greets and listens:
-      rescheduling, booking, status updates, tasks
-            |
-            v
-    User says what they need (voice/text)
-            |
-            v
-    Each turn goes to the service
-    (POST /voice/turn via src/api/bus.js)
-            |
-            v
-    Conversation is packaged and sent
-    to Ambiguous.ai for scheduling & planning
+  npm --prefix frontend install
+  npm run dev
 
-KEY IDEAS
----------
+  VITE_AMBIGUOUS_API_KEY   calendar/contacts for the board, transcripts
+  VITE_BUS_URL             service base for /voice/turn, /state, /tts
+  VITE_MESSAGING_URL       same service; board SMS button via /send
+  VITE_DEMO_PHONE          reroutes outbound texts to the demo number
 
-Personas: every agent is different -- name, voice, color theme, visual
-treatment. Agents feel human, not like a generic chatbot. With an API
-key they come from the Ambiguous workspace roster (GET /api/users, type
-"agent"); without one they come from frontend/src/agents.js.
-
-Video-first: the call UI shows the user's camera next to the agent's
-video surface. For the hackathon the agent side is a live animated
-avatar; visual interpolation and real generated video are future
-milestones.
-
-Voice now, visuals later: today the user talks or types to the agent.
-The interface is designed so a real avatar stream can drop in later
-without restructuring the app.
-
-RUNNING IT
-----------
-
-    cd frontend
-    npm install
-    cp .env.example .env.local   # add your Ambiguous API key (optional)
-    npm run dev
-
-Open the printed localhost URL.
-
-Verify any change with `npm run build` and `npm test` before calling it
-done -- coverage thresholds (80 percent on src/api and src/lib) are
-enforced by vitest config and the pre-commit hook.
-
-CONNECTING AMBIGUOUS.AI
------------------------
-
-  1. Get an API key (ak_...) at https://app.ambiguous.ai/admin
-  2. Put it in frontend/.env.local as VITE_AMBIGUOUS_API_KEY
-  3. Restart the dev server
-
-With a key set, the app pulls the real Ambiguous coworkers as callable
-agents, reads the day summary from Calendar/Tasks, creates tasks via
-POST /api/tasks, and stores the call transcript as a workspace document
-on hang up. Without a key it runs on local fallback personas -- same
-UI.
-
-CALL PATH VIA THE SERVICE
--------------------------
-
-When VITE_BUS_URL is set, each user turn in a call goes to
-voiceTurn({ from, body }) in src/api/bus.js, which posts to the
-service's POST /voice/turn and returns the reply text the agent
-speaks. The caller is identified by VITE_DEMO_PHONE (default
-+15550000001), so the whole call shares one thread with the same
-intents, bookings, CRM sync, and contractor notifications as SMS.
-When VITE_BUS_URL is unset or the request fails, voiceTurn returns
-null and the agent says it cannot reach the service -- there is no
-in-browser scheduling fallback, so a booking can never silently diverge
-from the service's calendar.
-
-ROADMAP
--------
-
-Done:
-
-  - Call UI with user video + per-persona agent surface
-  - Freeform request flow (summary, task, scheduling) via text/voice
-  - Ambiguous.ai integration layer (calendar jobs, transcript handoff)
-  - Call turns routed through the service voice endpoint when
-    VITE_BUS_URL is set (see docs/messaging.md)
-
-Not yet:
-
-  - Verify live API shapes against a real key
-  - Real speech-to-text / text-to-speech
-  - Animated agent video (visual interpolation)
-  - Auth + per-user agent persistence
-
-SEE ALSO
---------
-
-docs/ambiguous-integration.md -- verified endpoint shapes and gotchas.
-AGENTS.md                     -- component map and repo rules.
-docs/messaging.md             -- the service the ui talks to.
+Verify changes with `npm run build` and `npm --prefix frontend test`
+(80 percent coverage thresholds on src/api + src/lib).

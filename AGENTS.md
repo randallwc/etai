@@ -4,17 +4,6 @@ Guidance for AI coding agents (and humans) working in this repository.
 Read this file fully before making changes. When it conflicts with a
 guess, this file wins.
 
-## 0. Hackathon theme
-
-Agents are leaving the chatbox. Build an agent for a place people
-already work, talk, or live, then make it meaningfully more useful
-because of that context. Put it into the web, mobile, Slack, Teams,
-messaging, browsers, voice, wearables, robotics, or somewhere nobody
-expects to find one yet. What becomes possible when the agent shows up
-where the work is already happening?
-
----
-
 ## 1. Engineering rules
 
 1. No comments in code. Docstrings only on external, well-named
@@ -164,7 +153,7 @@ change with `npm run build` and `npm --prefix frontend test` before
 considering it done. Note: the commit hook runs only root `npm test` -
 run the frontend suite yourself before committing frontend changes.
 
-## 5. Where things live
+## 5. Boundaries
 
 One scheduling brain exists: `messaging/loop.js`. Inbound texts and
 voice turns reach it through `messaging/index.js`, which enqueues per
@@ -173,36 +162,19 @@ threadKey. Never add a second scheduler - the frontend calls
 
 The Ambiguous boundary is one file per side: `messaging/ambiguous.js`
 (backend) and `frontend/src/api/ambiguous.js` (browser). Components
-never fetch Ambiguous endpoints directly.
+never fetch Ambiguous endpoints directly. Read docs/ambiguous.md
+before touching either file.
 
-`App.jsx` owns the dispatch board and the call overlay.
-`CallScreen.jsx` owns the call phase machine: connecting, live,
-sending, done. `AgentSurface` renders whatever visual the persona
-defines; keep its props (`agent`, `speaking`) stable.
+Per-thread state lives in `messaging/state.js`; the store is the only
+mutable model. `CallScreen.jsx` owns the call phase machine:
+connecting, live, sending, done. Personas are data in `agents.js`,
+never hardcoded in a component. `AgentSurface` renders whatever visual
+the persona defines; keep its props (`agent`, `speaking`) stable.
 
-## 6. Architecture rules
+Loud failure over silent fallback: when the service is unreachable the
+UI says so; it never schedules locally.
 
-1. Small state, one owner. Per-thread state lives in
-   `messaging/state.js`; the store is the only mutable model.
-2. Personas are data, not code. The roster is a single etAI persona
-   from `agents.js`. Never hardcode a persona inside a component.
-3. The Ambiguous boundary is explicit: `src/api/ambiguous.js` is the
-   only frontend file that calls Ambiguous; `messaging/ambiguous.js`
-   is the only backend one.
-4. Media is behind a seam. `AgentSurface` renders whatever visual the
-   persona defines; the orb today, a video stream later.
-5. Loud failure over silent fallback. When the service is unreachable
-   the UI says so; it never schedules locally.
-
-## 7. Ambiguous.ai reference
-
-Full details live in docs/ambiguous-integration.md - verified endpoint
-shapes, gotchas (provisional workspace blocks provisioning until the
-human verifies; coworkers dispatch needs a service id that only
-persona-backed coworkers have), and approaches we tried and rejected.
-Read it before touching src/api/.
-
-## 8. Definition of done
+## 6. Definition of done
 
 Root `npm test` passes (runs on every commit via .githooks). For
 frontend work: `npm run build` and `npm test` pass, and the connecting,
