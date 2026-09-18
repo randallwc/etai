@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import AgentSurface from "./AgentSurface.jsx";
-import { handleRequest, sendConversation } from "../api/ambiguous.js";
+import { sendConversation } from "../api/ambiguous.js";
 import { voiceTurn } from "../api/bus.js";
 import { speak, stopSpeaking } from "../lib/speak.js";
-import { isDoneSignal, offlineReply } from "../lib/parseRequest.js";
+
+const DONE_RE =
+  /^(yes|yeah|yep|yup|that's all|thats all|that is all|all set|done|no|nope|nothing else|i'm good|im good|perfect|great|bye)[.!]?$/i;
 
 const SR =
   typeof window !== "undefined"
@@ -65,18 +67,19 @@ export default function CallScreen({ agent, agents, onSwitch, onExit }) {
     if (!text || phase !== "live") return;
     userSay(text);
 
-    if (lastAgentMsg?.text.includes("Is that all") && isDoneSignal(text)) {
+    if (lastAgentMsg?.text.includes("Is that all") && DONE_RE.test(text)) {
       agentSay("Perfect - passing everything to Ambiguous to confirm. Bye!");
       setTimeout(handleEnd, 1400);
       return;
     }
 
     setSpeaking(true);
-    const reply =
-      (await voiceTurn({ from: CALLER, body: text }).catch(() => null)) ||
-      (await handleRequest(text).catch(() => null));
+    const reply = await voiceTurn({ from: CALLER, body: text }).catch(() => null);
     setSpeaking(false);
-    setTimeout(() => agentSay(reply || offlineReply(text)), 500);
+    setTimeout(
+      () => agentSay(reply || "Sorry - I can't reach the service right now. Try again in a bit."),
+      500
+    );
   }
 
   submitRef.current = submitUserText;

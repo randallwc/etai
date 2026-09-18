@@ -12,14 +12,6 @@ export async function geocode(place) {
   return hit ? { lat: Number(hit.lat), lon: Number(hit.lon) } : null;
 }
 
-export async function driveMinutes(from, to) {
-  const j = await fetchJson(
-    `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`
-  );
-  const seconds = j.routes?.[0]?.duration;
-  return seconds == null ? null : Math.round(seconds / 60);
-}
-
 export async function route(from, to) {
   try {
     const j = await fetchJson(
@@ -36,21 +28,3 @@ export async function route(from, to) {
   }
 }
 
-export async function precipAt(lat, lon, when) {
-  const date = when.toISOString().slice(0, 10);
-  const j = await fetchJson(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&start_date=${date}&end_date=${date}&timezone=auto`
-  );
-  const times = j.hourly?.time ?? [];
-  const probs = j.hourly?.precipitation_probability ?? [];
-  let best = null;
-  let bestDiff = Infinity;
-  times.forEach((t, i) => {
-    const diff = Math.abs(new Date(t) - when);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = probs[i];
-    }
-  });
-  return best;
-}

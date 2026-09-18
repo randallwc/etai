@@ -1,7 +1,7 @@
 const BUS_URL = import.meta.env.VITE_BUS_URL;
 
 /**
- * Send one caller turn to the bus per the docs/bus.md /voice/turn
+ * Send one caller turn to the bus per the docs/messaging.md /voice/turn
  * contract. Never throws at the UI - resolves the reply string to
  * speak, or null when the bus is unset, unreachable, or errors.
  */

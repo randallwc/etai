@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "test": "node --test '*/tests/*.test.js'",
-    "test:calendar": "node calendar-agent/main.js"
+    "start": "node messaging/index.js",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build"
   },
   "engines": {
     "node": ">=18"

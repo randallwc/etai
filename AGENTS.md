@@ -95,55 +95,51 @@ draggable picture-in-picture tile.
 /
 ├── README.md
 ├── AGENTS.md                  this file
-├── docs/SHARED_MEMORY.md      live state + landmines for all agents
 ├── LICENSE
-├── package.json               root test script: node --test '*/tests/*.test.js'
+├── package.json               scripts: test, start, dev, build
 ├── .githooks/pre-commit       runs root npm test (core.hooksPath=.githooks)
-├── models/                    JSON Schemas for every data shape - schema
-│                              first, before code that touches it.
-│                              Tests in models/tests/ validate all files.
+├── models/                    JSON Schemas - schema first, before code
+│                              that touches the shape. Only live
+│                              contracts stay here (intent.schema.json).
 ├── docs/                      prose documentation, unix format, no tables
-├── messaging/                 phone service: POST /send out, normalized
-│   │                          inbound fanout to subscribers, BlueBubbles +
-│   │                          sim transports. Contract: docs/PHONE.md,
-│   │                          run notes: docs/messaging.md
-│   └── tests/
-├── Makefile                   delegates to per-component Makefiles
-├── calendar-agent/            Ambiguous Assistant chat smoke script
-│   └── tests/
-├── bus/                     the agent core - texts and voice turns
-│   │                          in, Ambiguous calls, replies out.
-│   │                          Docs: docs/bus.md
-│   ├── index.js               HTTP + wiring (createBusServer)
+├── messaging/                 THE service - texts and voice turns in,
+│   │                          replies out. One process, no deps.
+│   │                          Docs: docs/messaging.md
+│   ├── index.js               HTTP + wiring (createService); inbound
+│   │                          enqueues per threadKey into the loop
+│   ├── transports.js          outbound providers: bluebubbles,
+│   │                          ambimail, sim
+│   ├── normalize.js           provider payloads -> normalized inbound
+│   ├── mailpoller.js          Ambiguous inbox poll for SMS replies
 │   ├── loop.js                intent -> calendar tools -> reply
 │   ├── ai.js                  assistant/chat intent classification
+│   ├── prompts.js             per-channel classify prompts
 │   ├── calendar.js            calendar adapter + stub fallback
 │   ├── state.js               threads/jobs/customers/dedup/action log
 │   ├── reminders.js           pre-job heads-up texts
 │   ├── packet.js              booking paperwork: intake form, work
 │   │                          order doc, Sign draft, CRM deal, task
 │   ├── ambiguous.js           THE backend Ambiguous boundary
-│   └── tests/
-├── shared/                    zero-dep helpers shared across services
+│   ├── tts.js                 neural TTS for the call UI
+│   └── tests/smoke.test.js    high-level smoke tests only
+├── shared/                    zero-dep helpers
 │   └── env.js                 .env loader (no override of set vars)
-├── bus/                       central router: /webhooks/inbound forwards
-│                              to calendar AI, /webhooks/calendar takes
-│                              notifications -> texts via messaging /send
 └── frontend/                  React + Vite app (self-contained deployable)
     ├── index.html
     ├── package.json
     ├── vite.config.js
     ├── vitest.config.js       coverage thresholds: 80% on src/api + src/lib
-    ├── .env.local             VITE_AMBIGUOUS_API_KEY (gitignored)
+    ├── .env.local             VITE_AMBIGUOUS_API_KEY, VITE_BUS_URL
+    │                          (gitignored)
     └── src/
         ├── main.jsx           entry point
         ├── App.jsx            console shell: board, job detail, call overlay
         ├── agents.js          the single etAI persona
         ├── styles.css         all styling, CSS custom properties
-        ├── api/ambiguous.js   THE Ambiguous boundary - only file with fetch
-        ├── lib/parseRequest.js request classification, done-detection,
-        │                      offline replies
-        ├── lib/schedule.js    free/busy slot math, time formatting
+        ├── api/ambiguous.js   THE Ambiguous boundary - only file with
+        │                      fetch for Ambiguous
+        ├── api/bus.js         transport to the service: voiceTurn,
+        │                      synthSpeech, fetchBoard
         └── components/
             ├── CallScreen.jsx     call UI + conversation state machine
             └── AgentSurface.jsx   full-screen agent visual (Rive pin)
@@ -151,94 +147,52 @@ draggable picture-in-picture tile.
 
 ## 4. Commands
 
-Every component has a Makefile; the root one delegates (`make test`,
-`make run-messaging`, `make run-bus`, `make frontend-build`,
-`make frontend-test`, `make -C <dir> test`).
+No Makefiles - plain npm scripts.
 
-Root tests (backend, node:test): `npm test` from repo root - the glob is
-`'*/tests/*.test.js'`; `node --test <dir>` does not discover tests.
-Messaging service: `make run-messaging` (PORT, default 4020)
-Bus service: `make run-bus` (PORT, default 4010)
-Calendar smoke script: `npm run test:calendar` (needs AMBIGUOUS_API_KEY)
+Service: `npm start` (node messaging/index.js, PORT default 4020)
+Root tests: `npm test` (node --test over '*/tests/*.test.js'; the glob
+form is required, `node --test <dir>` does not discover tests)
 Install deps: `cd frontend && npm install`
-Dev server: `cd frontend && npm run dev`
-Build: `cd frontend && npm run build`
-Frontend tests: `cd frontend && npm test`
+Dev server: `npm run dev`
+Build: `npm run build`
+Frontend tests: `npm --prefix frontend test`
 Ambiguous CLI: `npx ambiguous@latest catalog` (from repo root - uses
 ./.ambi/config.json)
 
 Verify any backend change with root `npm test`; verify any frontend
-change with `npm run build` and `npm test` before considering it done.
-Note: the commit hook runs only root `npm test` - run the frontend
-suite yourself before committing frontend changes.
+change with `npm run build` and `npm --prefix frontend test` before
+considering it done. Note: the commit hook runs only root `npm test` -
+run the frontend suite yourself before committing frontend changes.
 
-## 5. Sub-agent roles
+## 5. Where things live
 
-When parallelizing work, split along these boundaries. Each role owns its
-files exclusively - never let two agents edit the same file.
+One scheduling brain exists: `messaging/loop.js`. Inbound texts and
+voice turns reach it through `messaging/index.js`, which enqueues per
+threadKey. Never add a second scheduler - the frontend calls
+`POST /voice/turn` and shows a clear error when the service is down.
 
-### 5.1 Frontend UI Agent
-Owns `frontend/src/components/` and `frontend/src/styles.css`. Builds the
-call interface: agent surface, camera PiP, captions, controls, persona
-theming. Does not touch state flow in `CallScreen` without coordinating
-with the conversation role.
+The Ambiguous boundary is one file per side: `messaging/ambiguous.js`
+(backend) and `frontend/src/api/ambiguous.js` (browser). Components
+never fetch Ambiguous endpoints directly.
 
-### 5.2 Persona / Conversation Agent
-Owns `frontend/src/agents.js`, `frontend/src/lib/parseRequest.js`, and the
-dialogue flow inside `CallScreen`. Personas must feel human: distinct
-voice, no generic chatbot phrasing.
-
-### 5.3 Integration Agent
-Owns `frontend/src/api/ambiguous.js` and `frontend/src/lib/schedule.js`.
-The contract: `fetchCoworkers` (roster from /users), `fetchDaySummary`
-(calendar + tasks), `createTask`, `handleRequest` (scheduling and task
-routing mid-call), `sendConversation` (transcript handoff). Components
-never fetch Ambiguous endpoints directly. Every function degrades
-gracefully when no API key is set.
-
-### 5.4 Media / Voice Agent
-Owns the agent visual surface and audio I/O: the orb (or video later),
-mic to STT, TTS to speaker, and the phone-call layer. For call
-intelligence, do NOT rebuild scheduling logic - POST each caller turn
-to the agent service's `POST /voice/turn` ({from, body} -> {reply} to
-speak); notifications to the other party go out over messaging
-automatically. Contract in docs/bus.md. Keep `AgentSurface`'s props
-(`agent`, `speaking`) stable.
-
-### 5.5 Messaging / Phone Agent
-Owns `messaging/` - the phone service behind the docs/PHONE.md
-contract. Transports (BlueBubbles, sim, ambimail, LoopMessage/Twilio if
-added) live in `transports.js`; normalization in `normalize.js`;
-fanout/dedup in `index.js`. Invariant: subscribers only ever see the
-normalized inboundMessage shape; transport detail never crosses the
-boundary.
-
-### 5.6 Agent Core Agent
-Owns `bus/` (docs/bus.md). Consumes normalized inbound from the
-messaging service and voice turns via POST /voice/turn, owns per-thread
-state and the data model (models/*.schema.json), classifies intent via
-bus/ai.js, calls Ambiguous through its own `bus/ambiguous.js`
-client, replies via messaging POST /send (or in the voice response
-body). Never touches a transport directly. The Ambiguous boundary rule
-applies here too: one file fetches Ambiguous.
+`App.jsx` owns the dispatch board and the call overlay.
+`CallScreen.jsx` owns the call phase machine: connecting, live,
+sending, done. `AgentSurface` renders whatever visual the persona
+defines; keep its props (`agent`, `speaking`) stable.
 
 ## 6. Architecture rules
 
-1. Small state, one owner. `App.jsx` owns the dispatch board and the
-   call overlay. `CallScreen.jsx` owns the call phase machine:
-   connecting, live, sending, done.
+1. Small state, one owner. Per-thread state lives in
+   `messaging/state.js`; the store is the only mutable model.
 2. Personas are data, not code. The roster is a single etAI persona
-   from `agents.js`; `fetchCoworkers` stays in the api boundary if a
-   multi-agent roster ever returns. Never hardcode a persona inside a
-   component.
-3. The Ambiguous boundary is explicit: `src/api/ambiguous.js` is the only
-   frontend file that calls fetch. The backend twin is
-   `bus/ambiguous.js` once the agent core lands. Offline mode must
-   keep the app working end-to-end.
+   from `agents.js`. Never hardcode a persona inside a component.
+3. The Ambiguous boundary is explicit: `src/api/ambiguous.js` is the
+   only frontend file that calls Ambiguous; `messaging/ambiguous.js`
+   is the only backend one.
 4. Media is behind a seam. `AgentSurface` renders whatever visual the
    persona defines; the orb today, a video stream later.
-5. Graceful degradation. Camera denied means a placeholder tile and the
-   user continues by text.
+5. Loud failure over silent fallback. When the service is unreachable
+   the UI says so; it never schedules locally.
 
 ## 7. Ambiguous.ai reference
 
@@ -252,7 +206,6 @@ Read it before touching src/api/.
 
 Root `npm test` passes (runs on every commit via .githooks). For
 frontend work: `npm run build` and `npm test` pass, and the connecting,
-live, sending, done flow still works end-to-end including re-dial and
-mid-call switching. Personas render distinctly. The Ambiguous boundary
-stays in `src/api/ambiguous.js` (frontend) and `bus/ambiguous.js`
-(backend). No secrets, no dead code.
+live, sending, done flow still works end-to-end including re-dial.
+The Ambiguous boundary stays in `src/api/ambiguous.js` (frontend) and
+`messaging/ambiguous.js` (backend). No secrets, no dead code.

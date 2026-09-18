@@ -28,32 +28,15 @@ module, "api GET|POST <path> [-d json]" is the raw escape hatch,
 Auth resolves from AMBI_API_TOKEN, then ./.ambi/config.json (searched
 upward), then ~/.ambi/config.json.
 
-Make targets
-------------
+Commands
+--------
 
-Each component has a Makefile; the root Makefile delegates.
-
-  make test             all backend tests (same as npm test)
-  make run-messaging    messaging service on :4020
-  make run-bus          bus service on :4010
-  make -C <dir> test    one component's tests (messaging, bus,
-                        calendar-agent, shared, models)
-  make frontend-build   frontend production build
-  make frontend-test    frontend vitest suite
-
-Demo
-----
-
-  make demo   runs scripts/demo.js: boots messaging on the sim
-              transport and the bus on ephemeral ports, waits for the
-              agent to self-subscribe, then drives the four demo flows
-              (booking, running late, cancel, day summary) through
-              /simulate/inbound and prints the transcript. Exits
-              non-zero if an expected reply never arrives. With the
-              repo .env the bus uses the real Ambiguous calendar;
-              without a key it gets the in-memory stub but intent
-              classification still needs Ambiguous, so the flows only
-              pass with a working key.
+  npm start                  the service on :4020 (messaging/index.js)
+  npm test                   backend smoke tests (node --test over
+                             '*/tests/*.test.js')
+  npm run dev                frontend dev server
+  npm run build              frontend production build
+  npm --prefix frontend test frontend vitest suite
 
 Tests and hooks
 ---------------

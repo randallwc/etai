@@ -2,7 +2,7 @@ const MESSAGING_URL = import.meta.env.VITE_MESSAGING_URL;
 const DEMO_PHONE = import.meta.env.VITE_DEMO_PHONE;
 
 /**
- * Send a text through the messaging service per the docs/PHONE.md
+ * Send a text through the messaging service per the docs/messaging.md
  * outbound contract. Never throws at the UI - check `sent`/`via`.
  * VITE_DEMO_PHONE reroutes every outbound text to the demo number.
  */

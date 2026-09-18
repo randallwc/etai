@@ -1,38 +1,35 @@
 const http = require("node:http");
-const { readFileSync, writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+const { randomUUID } = require("node:crypto");
 const { createTransport } = require("./transports");
 const { createMailPoller } = require("./mailpoller");
 const { fromBlueBubbles, fromSim, fromAmbiguousMail, toE164 } = require("./normalize");
+const { createAmbiguous } = require("./ambiguous.js");
+const { createCalendar } = require("./calendar.js");
+const { createAi } = require("./ai.js");
+const { createStore } = require("./state.js");
+const { createLoop } = require("./loop.js");
+const { createJobPacket } = require("./packet.js");
+const { createTts } = require("./tts.js");
+const { startReminders } = require("./reminders.js");
 
-const SEEN_CAP = 5000;
+const REQUIRED_INBOUND = ["channel", "from", "body", "externalId", "receivedAt", "threadKey"];
 const RECENT_CAP = 200;
-const RETRY_CAP = 500;
 const MAX_BODY = 1 << 20;
 const PREFIX = "etAI update: ";
+const KIND_LABEL = { created: "New on calendar", updated: "Calendar change", deleted: "Canceled" };
 
-function loadUndelivered(file) {
-  try {
-    const data = JSON.parse(readFileSync(file, "utf8"));
-    if (!Array.isArray(data)) return [];
-    return data.filter((u) => u?.message?.externalId);
-  } catch {
-    return [];
-  }
-}
+function createService(env = process.env, overrides = {}) {
+  const transport = overrides.transport ?? createTransport(env);
+  const ambi = overrides.ambi ?? createAmbiguous(env);
+  const calendar = overrides.calendar ?? createCalendar({ ambi, env });
+  const ai = overrides.ai ?? createAi({ chat: (m) => ambi.assistantChat(m), env });
+  const store = overrides.store ?? createStore(env.STATE_FILE ?? null);
+  const tts = overrides.tts !== undefined ? overrides.tts : createTts({ env });
+  const contractorPhone = env.CONTRACT_PHONE ?? env.CONTRACTOR_PHONE;
+  const tz = env.CONTRACTOR_TZ ?? "America/Los_Angeles";
 
-function createMessagingServer(env = process.env) {
-  const transport = createTransport(env);
-  const fetchTimeout = Number(env.FETCH_TIMEOUT_MS ?? 8000);
-  const subscribers = new Set();
-  if (env.UPSTREAM_URL) {
-    subscribers.add(`${env.UPSTREAM_URL.replace(/\/$/, "")}/webhooks/inbound`);
-  }
-  const seen = new Set();
   const recent = [];
-  const undeliveredFile = env.UNDELIVERED_FILE ?? "/tmp/etai-undelivered.json";
-  const undelivered = loadUndelivered(undeliveredFile);
-  const retryMs = Number(env.FANOUT_RETRY_MS ?? 5000);
-  const retryMax = Number(env.FANOUT_RETRY_MAX ?? 24);
   const allowedFrom = new Set(
     (env.ALLOWED_FROM ?? "")
       .split(",")
@@ -41,101 +38,114 @@ function createMessagingServer(env = process.env) {
       .map(toE164),
   );
 
-  function saveUndelivered() {
-    try {
-      writeFileSync(undeliveredFile, JSON.stringify(undelivered));
-    } catch (e) {
-      console.error(`undelivered save to ${undeliveredFile} failed: ${e.message}`);
-    }
+  async function send({ to, body }) {
+    const text = body.startsWith(PREFIX) ? body : `${PREFIX}${body}`;
+    return transport.send({ to, body: text });
+  }
+
+  const notify = overrides.notify ?? send;
+
+  const loop =
+    overrides.loop ??
+    createLoop({
+      calendar,
+      ai,
+      store,
+      notify,
+      createTask: (t) => ambi.createTask(t),
+      upsertContact: ambi.enabled ? (c) => ambi.upsertContact(c) : null,
+      createPacket: ambi.enabled ? (a) => createJobPacket({ ambi, ...a }) : null,
+      contractorPhone,
+      tz,
+    });
+
+  const turns = new Map();
+  function enqueue(key, fn) {
+    const prev = turns.get(key) ?? Promise.resolve();
+    const run = prev.then(fn);
+    const tail = run.catch(() => {});
+    turns.set(key, tail);
+    tail.finally(() => {
+      if (turns.get(key) === tail) turns.delete(key);
+    });
+    return run;
   }
 
   function record(message) {
-    if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
-    seen.add(message.externalId);
     recent.push(message);
     if (recent.length > RECENT_CAP) recent.shift();
   }
 
-  async function fanout(message) {
-    const results = await Promise.all(
-      [...subscribers].map(async (url) => {
-        try {
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(message),
-            signal: AbortSignal.timeout(fetchTimeout),
-          });
-          return res.ok;
-        } catch (e) {
-          console.error(`fanout to ${url} failed: ${e.message}`);
-          return false;
-        }
-      }),
-    );
-    return results.filter(Boolean).length;
+  function handleInbound(msg) {
+    if (!store.dedup(msg.externalId)) return { duplicate: true };
+    record(msg);
+    const beat = setTimeout(() => {
+      notify({ to: msg.from, body: "On it - checking the schedule now.", threadKey: msg.threadKey }).catch(() => {});
+    }, Number(env.WORKING_BEAT_MS ?? 1500));
+    enqueue(msg.threadKey, () => loop.handle(msg))
+      .catch((e) => console.error(`loop error: ${e.stack}`))
+      .finally(() => clearTimeout(beat));
+    return { accepted: true };
   }
 
-  const inflight = new Set();
   async function accept(message) {
     if (!message) return null;
     if (allowedFrom.size && !allowedFrom.has(toE164(message.from))) {
-      if (seen.size >= SEEN_CAP) seen.delete(seen.values().next().value);
-      seen.add(message.externalId);
+      store.dedup(message.externalId);
       return { message, filtered: true };
     }
-    if (seen.has(message.externalId) || inflight.has(message.externalId))
-      return { message, duplicate: true };
-    const queued = undelivered.findIndex((u) => u.message.externalId === message.externalId);
-    if (queued >= 0) {
-      undelivered.splice(queued, 1);
-      saveUndelivered();
-    }
-    inflight.add(message.externalId);
-    let delivered;
-    try {
-      delivered = await fanout(message);
-    } finally {
-      inflight.delete(message.externalId);
-    }
-    if (!delivered) {
-      undelivered.push({ message, attempts: 0 });
-      if (undelivered.length > RETRY_CAP) undelivered.shift();
-      saveUndelivered();
-      return null;
-    }
-    record(message);
-    return { message, delivered };
+    return { message, ...handleInbound(message) };
   }
 
-  async function retryUndelivered() {
-    let changed = false;
-    for (let i = undelivered.length - 1; i >= 0; i--) {
-      const u = undelivered[i];
-      if (!u || inflight.has(u.message.externalId)) continue;
-      if (seen.has(u.message.externalId)) {
-        undelivered.splice(i, 1);
-        changed = true;
-        continue;
-      }
-      inflight.add(u.message.externalId);
-      let delivered;
-      try {
-        delivered = await fanout(u.message);
-      } finally {
-        inflight.delete(u.message.externalId);
-      }
-      const idx = undelivered.indexOf(u);
-      if (delivered) {
-        if (idx >= 0) undelivered.splice(idx, 1);
-        record(u.message);
-      } else if (++u.attempts >= retryMax) {
-        if (idx >= 0) undelivered.splice(idx, 1);
-        console.error(`dropping ${u.message.externalId}: undeliverable after ${retryMax} retries`);
-      }
-      changed = true;
+  function fmtWhen(iso) {
+    if (!iso) return "soon";
+    return new Date(iso).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: tz,
+    });
+  }
+
+  async function notifyContractor(n) {
+    const label = n.kind === "reminder" ? "Reminder" : (KIND_LABEL[n.kind] ?? `Calendar ${n.kind ?? "update"}`);
+    const text = `${label}: ${n.title} at ${fmtWhen(n.startAt ?? n.triggerAt)}${n.actor ? ` (by ${n.actor})` : ""}`;
+    if (!contractorPhone) return console.log(`[service] ${text} (CONTRACT_PHONE unset)`);
+    await notify({ to: contractorPhone, body: text });
+  }
+
+  function handleCalendarNotification(body) {
+    const ev = body?.data && typeof body.data === "object" ? body.data : (body ?? {});
+    const kind = /^event\.(\w+)$/.exec(body?.type ?? "")?.[1] ?? body?.kind;
+    const title = ev.title ?? ev.summary ?? body?.summary;
+    const startAt = ev.start_at ?? ev.startAt ?? ev.start ?? ev.window?.start ?? body?.startAt ?? body?.triggerAt;
+    const dedupId = typeof body?.id === "string" && body.id ? body.id : `${ev.id}:${kind}:${startAt}`;
+    if (!dedupId || typeof title !== "string" || !title) {
+      return { error: "id and title required" };
     }
-    if (changed) saveUndelivered();
+    if (!store.dedup(`cal:${dedupId}`)) return { duplicate: true };
+    notifyContractor({ kind, title, startAt, actor: body?.actor?.name }).catch((e) =>
+      console.error(`[service] calendar notify failed: ${e.message}`),
+    );
+    calendar.sync?.();
+    return { accepted: true };
+  }
+
+  async function pollRemoteReminders(now = new Date()) {
+    if (!ambi.enabled) return { found: 0, sent: 0 };
+    const windowHours = Number(env.REMINDER_WINDOW_HOURS) || 24;
+    const res = await ambi.api(`/calendars/upcoming-reminders?window_hours=${windowHours}`);
+    let sent = 0;
+    for (const r of res.reminders ?? res.data ?? []) {
+      if (!r.trigger_at || new Date(r.trigger_at) > now) continue;
+      if (!store.dedup(`cal:${r.id}`)) continue;
+      notifyContractor({
+        kind: "reminder",
+        title: r.event_title ?? "event",
+        startAt: r.event_start_at ?? null,
+      }).catch((e) => console.error(`[service] reminder failed: ${e.message}`));
+      sent += 1;
+    }
+    return { found: (res.reminders ?? res.data ?? []).length, sent };
   }
 
   function readBody(req) {
@@ -171,23 +181,27 @@ function createMessagingServer(env = process.env) {
     res.end(status === 204 ? undefined : JSON.stringify(payload ?? {}));
   }
 
+  function validInbound(body) {
+    return (
+      REQUIRED_INBOUND.every((k) => body[k] != null && body[k] !== "") &&
+      /^\+[1-9]\d{6,14}$/.test(body.from) &&
+      typeof body.body === "string"
+    );
+  }
+
   async function handle(req, res) {
     if (req.method === "OPTIONS") return reply(res, 204);
-    const url = new URL(req.url, "http://localhost");
-    const path = url.pathname;
+    const path = new URL(req.url, "http://localhost").pathname;
     if (req.method === "GET" && path === "/healthz") {
       const health = {
         ok: true,
         transport: transport.name,
-        subscribers: subscribers.size,
-        queued: undelivered.length,
+        stub: calendar.stub ?? false,
+        ambiguous: ambi.enabled,
+        tts: Boolean(tts),
       };
       if (allowedFrom.size) health.allowed = allowedFrom.size;
-      if (
-        allowedFrom.size &&
-        env.CONTRACT_PHONE &&
-        !allowedFrom.has(toE164(env.CONTRACT_PHONE))
-      ) {
+      if (allowedFrom.size && env.CONTRACT_PHONE && !allowedFrom.has(toE164(env.CONTRACT_PHONE))) {
         health.warn = "CONTRACT_PHONE is not in ALLOWED_FROM";
       }
       return reply(res, 200, health);
@@ -195,15 +209,20 @@ function createMessagingServer(env = process.env) {
     if (req.method === "GET" && path === "/messages") {
       return reply(res, 200, { messages: recent });
     }
+    if (req.method === "GET" && path === "/state") {
+      return reply(res, 200, {
+        jobs: Object.values(store.data.jobs),
+        customers: Object.values(store.data.customers),
+        actions: store.data.actions,
+      });
+    }
     if (req.method !== "POST") {
       return reply(res, 404, { error: { code: "invalid", message: "not found" } });
     }
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (e) {
-      return reply(res, e.status ?? 400, {
-        error: { code: "invalid", message: e.status ? "body too large" : "malformed json" },
+    const body = await readBody(req).catch((e) => ({ __err: e }));
+    if (body.__err) {
+      return reply(res, body.__err.status ?? 400, {
+        error: { code: "invalid", message: body.__err.status ? "body too large" : "malformed json" },
       });
     }
     if (path === "/send") {
@@ -212,32 +231,31 @@ function createMessagingServer(env = process.env) {
         return reply(res, 400, { error: { code: "invalid", message: "to must be E.164 and body non-empty" } });
       }
       try {
-        const text = body.body.startsWith(PREFIX) ? body.body : `${PREFIX}${body.body}`;
-        const result = await transport.send({ to, body: text });
-        return reply(res, 200, result);
+        return reply(res, 200, await send({ to, body: body.body }));
       } catch (e) {
         return reply(res, e.status ?? 502, { error: { code: "upstream", message: e.message } });
       }
     }
+    if (path === "/webhooks/inbound") {
+      if (!validInbound(body)) {
+        return reply(res, 400, { error: { code: "invalid", message: "missing required inbound fields" } });
+      }
+      return reply(res, 202, handleInbound(body));
+    }
     if (path === "/webhooks/bluebubbles") {
-      const message = await accept(fromBlueBubbles(body));
-      return reply(res, 202, { accepted: Boolean(message) });
+      const r = await accept(fromBlueBubbles(body));
+      return reply(res, 202, { accepted: Boolean(r && !r.duplicate && !r.filtered) });
     }
     if (path === "/webhooks/ambimail") {
       console.log("ambimail event:", JSON.stringify(body).slice(0, 2000));
-      const message = await accept(fromAmbiguousMail(body));
-      if (/^(event|calendar)\./.test(body?.type ?? "")) {
-        for (const url of subscribers) {
-          const target = url.replace(/\/webhooks\/inbound\/?$/, "") + "/webhooks/calendar";
-          fetch(target, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-            signal: AbortSignal.timeout(fetchTimeout),
-          }).catch((e) => console.error(`calendar event to ${target} failed: ${e.message}`));
-        }
-      }
-      return reply(res, 202, { accepted: Boolean(message) });
+      const r = await accept(fromAmbiguousMail(body));
+      if (/^(event|calendar)\./.test(body?.type ?? "")) handleCalendarNotification(body);
+      return reply(res, 202, { accepted: Boolean(r && !r.duplicate && !r.filtered) });
+    }
+    if (path === "/webhooks/calendar") {
+      const r = handleCalendarNotification(body);
+      if (r.error) return reply(res, 400, { error: { code: "invalid", message: r.error } });
+      return reply(res, 202, r);
     }
     if (path === "/simulate/inbound") {
       const inbound = fromSim(body);
@@ -245,17 +263,64 @@ function createMessagingServer(env = process.env) {
         return reply(res, 400, { error: { code: "invalid", message: "from and body required" } });
       }
       const r = await accept(inbound);
-      if (!r) {
-        return reply(res, 503, { accepted: false, error: { code: "unavailable", message: "no subscriber accepted" } });
-      }
-      return reply(res, 202, { accepted: true, externalId: inbound.externalId, duplicate: Boolean(r.duplicate) });
+      return reply(res, 202, { accepted: Boolean(r && !r.duplicate && !r.filtered), externalId: inbound.externalId });
     }
-    if (path === "/subscriptions") {
-      if (typeof body.url !== "string" || !/^https?:\/\//.test(body.url)) {
-        return reply(res, 400, { error: { code: "invalid", message: "url must be http(s)" } });
+    if (path === "/voice/turn") {
+      if (!/^\+[1-9]\d{6,14}$/.test(body.from ?? "") || typeof body.body !== "string" || !body.body) {
+        return reply(res, 400, { error: { code: "invalid", message: "need from (E.164) and body" } });
       }
-      subscribers.add(body.url);
-      return reply(res, 200, { subscribed: body.url, subscribers: subscribers.size });
+      const msg = {
+        channel: "voice",
+        from: body.from,
+        body: body.body,
+        threadKey: body.threadKey ?? body.from,
+        externalId: body.externalId ?? `voice-${randomUUID()}`,
+        receivedAt: new Date().toISOString(),
+      };
+      if (!store.dedup(msg.externalId)) {
+        return reply(res, 200, { reply: "", duplicate: true });
+      }
+      let timer;
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(() => resolve("still working on it - I'll text you when it's done"), Number(env.TURN_TIMEOUT_MS ?? 30_000));
+      });
+      const result = await Promise.race([enqueue(msg.threadKey, () => loop.handle(msg)), timeout])
+        .catch((e) => {
+          console.error(`loop error: ${e.stack}`);
+          return "";
+        })
+        .finally(() => clearTimeout(timer));
+      return reply(res, 200, { reply: result ?? "" });
+    }
+    if (path === "/tts") {
+      if (!tts) {
+        return reply(res, 503, { error: { code: "unavailable", message: "tts not installed" } });
+      }
+      if (typeof body.text !== "string" || !body.text) {
+        return reply(res, 400, { error: { code: "invalid", message: "need text" } });
+      }
+      try {
+        const audio = await tts.synthesize(body.text);
+        res.writeHead(200, { "content-type": "audio/mpeg", "access-control-allow-origin": "*" });
+        return res.end(audio);
+      } catch {
+        return reply(res, 502, { error: { code: "upstream", message: "tts failed" } });
+      }
+    }
+    if (path === "/internal/digest") {
+      if (!contractorPhone) {
+        return reply(res, 400, { error: { code: "invalid", message: "CONTRACT_PHONE not set" } });
+      }
+      const text = await loop.digest();
+      await notify({ to: contractorPhone, body: text });
+      return reply(res, 200, { sent: true, text });
+    }
+    if (path === "/internal/client-update") {
+      const result = await loop.clientUpdate(body.phone);
+      if (body.phone && !result.sent) {
+        return reply(res, 400, { error: { code: "invalid", message: "no job for that phone" } });
+      }
+      return reply(res, 200, result);
     }
     return reply(res, 404, { error: { code: "invalid", message: "not found" } });
   }
@@ -268,18 +333,35 @@ function createMessagingServer(env = process.env) {
   });
   const mailPoller = createMailPoller(env, accept);
   if (mailPoller) mailPoller.start();
-  const retryTimer = setInterval(() => {
-    retryUndelivered().catch((e) => console.error(`retryUndelivered: ${e.message}`));
-  }, retryMs);
-  retryTimer.unref?.();
-  return { server, subscribers, recent, mailPoller, retryUndelivered };
+  return { server, loop, store, notify, send, calendar, transport, accept, pollRemoteReminders, mailPoller };
 }
 
 if (require.main === module) {
   require("../shared/env.js").loadEnv();
-  const port = Number(process.env.PORT ?? 4020);
-  const { server } = createMessagingServer();
-  server.listen(port, () => console.log(`messaging listening on :${port}`));
+  const env = {
+    ...process.env,
+    STATE_FILE: process.env.STATE_FILE ?? join(__dirname, ".state.json"),
+  };
+  const port = Number(env.PORT ?? 4020);
+  const svc = createService(env);
+  svc.server.listen(port, async () => {
+    console.log(`service listening on :${port}`);
+    if (svc.calendar.sync) {
+      await svc.calendar.sync();
+      setInterval(() => svc.calendar.sync(), Number(env.CALENDAR_SYNC_MS ?? 30_000)).unref();
+    }
+    setInterval(
+      () => svc.pollRemoteReminders().catch((e) => console.error(`[service] reminder poll failed: ${e.message}`)),
+      Number(env.REMINDER_POLL_MS ?? 60_000),
+    ).unref();
+  });
+  startReminders({
+    store: svc.store,
+    notify: svc.notify,
+    contractorPhone: env.CONTRACT_PHONE,
+    tz: env.CONTRACTOR_TZ ?? "America/Los_Angeles",
+    leadMinutes: Number(env.REMINDER_LEAD_MINUTES ?? 30),
+  });
 }
 
-module.exports = { createMessagingServer };
+module.exports = { createService };

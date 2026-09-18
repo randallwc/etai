@@ -1,19 +1,28 @@
-NOTIFICATIONS -- calendar reminders to the bus
-==============================================
+NOTIFICATIONS -- calendar reminders to texts
+============================================
 
-Written 2026-09-12. How a calendar reminder becomes a text.
+How a calendar reminder becomes a text. Both reminder paths live in
+the service now.
 
 FLOW
 ----
 
     Ambiguous upcoming-reminders feed
-      -> calendar-agent/notify.js   (poll every POLL_MS, default 60s)
-      -> POST {BUS_URL}/webhooks/calendar
-      -> bus dedups, formats one line
-      -> POST {MESSAGING_URL}/send to CONTRACT_PHONE
+      -> pollRemoteReminders() in messaging/index.js
+         (every REMINDER_POLL_MS, default 60s)
+      -> dedup on "cal:"+id, format one line
+      -> transport.send to CONTRACT_PHONE
 
-The calendar side owns everything Ambiguous; the bus stays a router. The
-shape crossing the boundary is models/calendar-notification.schema.json.
+A webhook POST /webhooks/calendar carries the same normalized shape
+({ id, kind, summary or event.title, startAt }) and lands in the same
+handler, so an Ambiguous push registration works too once the service
+has a public URL.
+
+The second path is messaging/reminders.js, which watches the service's
+own job store and texts the contractor inside REMINDER_LEAD_MINUTES of
+each agent-booked job. The two paths overlap deliberately -- one
+covers Ambiguous-side events (workspace UI, other clients), the other
+agent-booked jobs.
 
 SOURCE
 ------
@@ -23,53 +32,46 @@ with id, event_id, trigger_at, minutes_before, fired_at, event_title,
 event_start_at/end_at, event_status, event_location. Verified live
 2026-09-12 -- the feed works and events do carry reminders.
 
-The poller forwards a reminder once when trigger_at <= now. Dedup is an
-in-memory set on both sides (poller on reminder id, bus on "cal:"+id), so
-a restart re-delivers a still-due reminder once -- same caveat as
-messaging's dedup. A notification is only marked seen when the bus
-answers 2xx, so a down bus retries next poll instead of dropping.
+A reminder is forwarded once when trigger_at <= now. Dedup is an
+in-memory set ("cal:"+id), so a restart re-delivers a still-due
+reminder once -- same caveat as inbound dedup.
 
 ENV
 ---
 
-  calendar-agent:  BUS_URL, POLL_MS, REMINDER_WINDOW_HOURS (default 24),
-                   AMBIG_API/AMBIGUOUS_API_KEY
-  bus:             CONTRACT_PHONE (target), CONTRACTOR_TZ (display time),
-                   MESSAGING_URL
-
-Run it: `node calendar-agent/notify.js` alongside the bus and messaging.
-With BUS_URL unset the poller logs reminders to stdout instead of
-posting -- that is the offline mode.
+  REMINDER_WINDOW_HOURS  lookahead for the remote poll (default 24)
+  REMINDER_POLL_MS       remote poll interval (default 60000)
+  REMINDER_LEAD_MINUTES  local job-store heads-up window (default 30)
+  CONTRACT_PHONE         notification target
+  CONTRACTOR_TZ          display timezone
+  AMBIG_API              remote poll is skipped without a key
 
 GOTCHAS
 -------
 
 The feed only covers events that HAVE reminders. Events created through
-bus/calendar.js do not set one; those are covered by bus/reminders.js
-instead, which watches the agent's own job store. The two paths overlap
-deliberately -- one covers Ambiguous-side events (frontend call UI,
-workspace UI), the other agent-booked jobs.
+messaging/calendar.js do not set one; those are covered by
+reminders.js instead.
 
-Notifications go to the contractor only. Client phones for a job live in
-the agent's job store, which the bus cannot see -- client-facing reminder
-texts would need the agent as a stop or a job lookup endpoint.
+Notifications go to the contractor only. Client phones for a job live
+in the job store; client-facing reminder texts would need a job lookup
+per reminder.
 
-Reminders due while the poller was down are sent on the next tick --
+Reminders due while the service was down are sent on the next tick --
 a late text beats a dropped one -- but only once, bounded by dedup.
 
 TRIED AND REJECTED / UPGRADE PATHS
 ----------------------------------
 
-Push instead of pull: POST /api/webhooks {url, events:[...]} exists in the
-live spec (see /api/webhooks/event-types) and removes poll lag, but needs
-a public URL for the bus. Pull first; register a webhook when the bus has
-a stable public address.
+Push instead of pull: POST /api/webhooks {url, events:[...]} exists in
+the live spec and removes poll lag, but needs a public URL. Pull
+first; register a webhook when the service has a stable public
+address.
 
-Event diffs instead of the reminder feed: snapshot /calendars/events and
-diff for created/updated/canceled. Catches changes the reminder feed
-misses; the schema's kind enum already has room for it. Deferred -- more
-code for a case the demo does not need.
+Event diffs instead of the reminder feed: snapshot /calendars/events
+and diff for created/updated/canceled. Catches changes the reminder
+feed misses; the kind enum already has room for it. Deferred.
 
-GET /api/notifications (workspace feed, mark-read for server-side dedup)
-is the other pull source. Empty at test time; revisit if non-reminder
-calendar events need texted.
+GET /api/notifications (workspace feed, mark-read for server-side
+dedup) is the other pull source. Empty at test time; revisit if
+non-reminder calendar events need texted.

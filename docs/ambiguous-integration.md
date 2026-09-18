@@ -53,7 +53,7 @@ transcript lands in the workspace where any coworker can read it.
 The booking packet (verified live 2026-09-12)
 ---------------------------------------------
 
-When a booking lands, bus/packet.js creates the paperwork:
+When a booking lands, messaging/packet.js creates the paperwork:
 
 POST /api/forms {title, description, fields, is_published: true} returns
 the form with slug and workspace_slug. Field types are fixed:
@@ -103,14 +103,13 @@ coworker.
 List endpoints paginate with {data, total, has_more}; day-summary code
 tolerates absent fields.
 
-POST /api/assistant/chat is live (see assistant-chat-response schema)
-and wired into handleRequest: non-scheduling text goes to the
-Assistant, which answers with its own workspace tools; on failure the
-request falls back to creating a task. Scheduling stays on the
-deterministic primitive path (resolve attendee, check availability,
-create event) because it owns the travel/weather/working-hours checks
-and avoids the Assistant's ~30s agentic-loop timeout noted in
-docs/calendar-agent.md.
+POST /api/assistant/chat is live and wired into messaging/ai.js for
+intent classification: the service asks for a JSON intent object and
+falls back to keyword classification when the response fails or will
+not parse, so the loop works without a key. Scheduling itself stays on
+the deterministic primitive path (check availability, create event)
+because it owns the working-hours and slot checks and avoids the
+Assistant's ~30s agentic-loop timeout.
 
 Approaches considered
 ---------------------

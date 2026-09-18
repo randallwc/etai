@@ -7,5 +7,4 @@ coverage/
 *.swp
 .secrets*
 .DS_Store
-bus/.state.json
-agent/.state.json
+messaging/.state.json
